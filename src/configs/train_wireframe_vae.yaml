@@ -1,0 +1,55 @@
+resume_training: false
+from_start: false
+
+epochs: 100
+batch_size: 256
+lr: 0.0001
+label_smoothing: 0.005
+
+num_workers: 64
+grad_accum_every: 2
+max_grad_norm: 1.
+num_gpus: 8
+
+val_every_epoch: 1
+save_every_epoch: 1
+log_every_step: 10
+
+use_wandb_tracking: false
+wandb_project_name: wireframe_vae
+wandb_run_name: test
+
+DATA:
+    train_set_file_path: /studio/datasets/abc/dataset/wireframe_dataset/train
+    val_set_file_path: /studio/datasets/abc/dataset/wireframe_dataset/val
+    recon_dir_path: /studio/datasets/abc/recon/wireframe/
+    replication: 1
+
+MODEL:
+    max_col_diff: 6
+    max_row_diff: 32
+    max_curves_num: 128
+
+    wireframe_latent_num: 64
+    latent_channels: 16
+
+    attn_encoder_depth: 4
+    attn_decoder_self_depth: 12
+    attn_decoder_cross_depth: 2
+
+    curve_latent_embed_dim: 256
+
+    attn_dim: 768
+    num_heads: 12
+    
+    use_mlp_predict: false
+
+    flag_bce_loss_weight: 1.
+    segment_ce_loss_weight: 50.
+    col_diff_ce_loss_weight: 1.
+    row_diff_ce_loss_weight: 1.
+    curve_latent_loss_weight: 50.
+    kl_loss_weight: 0.000035
+    
+    checkpoint_folder: checkpoints/checkpoints_wireframe_vae
+    checkpoint_file_name: model-100.pt
