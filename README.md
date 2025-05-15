@@ -23,8 +23,7 @@
 
 <img src='assets/teaser.png'/>
 
-
-https://github.com/user-attachments/assets/cf6dff76-48a4-4390-8ae3-987a96bf1872
+https://github.com/user-attachments/assets/adc120d7-6ac1-45fd-bcbb-b6081ddf3cd0
 
 
 ## Installation
@@ -62,7 +61,7 @@ To train the model, please use the following commands:
 If you find our work useful for your research, please consider citing the following papers :)
 
 ```bibtex
-@inproceedings{CLRWire,
+@inproceedings{CLRWire25,
     title = {CLR-Wire: Towards Continuous Latent Representations for 3D Curve Wireframe Generation},
     author = {Xueqi Ma and Yilin Liu and Tianlong Gao and Qirui Huang and Hui Huang},
     booktitle = {ACM SIGGRAPH},
