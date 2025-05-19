@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 
 from src.vae.vae_wireframe import AutoencoderKLWireframe as MyModel
 from src.dataset.dataset import WireframeDataset as MyDataset
-from trainer.trainer_vae import Trainer as MyTrainer
+from src.trainer.trainer_vae import Trainer as MyTrainer
 from src.utils.config import NestedDictToClass, load_config
 
 # Arguments

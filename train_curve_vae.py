@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 
 from src.vae.vae_curve import AutoencoderKL1D as MyModel
 from src.dataset.dataset import CurveDataset as MyDataset
-from trainer.trainer_vae import Trainer as MyTrainer
+from src.trainer.trainer_vae import Trainer as MyTrainer
 from src.utils.config import NestedDictToClass, load_config
 
 # Arguments
