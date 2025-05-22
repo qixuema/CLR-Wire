@@ -2,7 +2,7 @@ resume_training: false
 from_start: true
 
 epochs: 400
-batch_size: 1024
+batch_size: 4096
 lr: 0.0003
 num_workers: 64
 num_gpus: 8
@@ -15,7 +15,7 @@ val_every_epoch: 1
 save_every_epoch: 10
 log_every_step: 10
 
-use_wandb_tracking: false
+use_wandb_tracking: true
 wandb_project_name: curve_vae
 wandb_run_name: test
 
@@ -23,7 +23,7 @@ wandb_run_name: test
 DATA:
     train_set_file_path: /studio/datasets/abc/dataset/curve_dataset/curve_train_dataset.npy
     val_set_file_path: /studio/datasets/abc/dataset/curve_dataset/curve_val_dataset.npy
-    replication: 10
+    replication: 20
     recon_dir_path: /studio/datasets/abc/recon/curves
 
 MODEL:
