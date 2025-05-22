@@ -18,7 +18,7 @@ from einops import rearrange
 
 from src.vae.modules import AutoencoderKLOutput, RandomFourierEmbed, UNetMidBlock1D, UpBlock1D
 from src.utils.torch_tools import interpolate_1d, calculate_polyline_lengths, sample_edge_points
-
+from src.utils.geometry import point_seq_tangent
 
 class Encoder1D(nn.Module):
     def __init__(
@@ -32,13 +32,14 @@ class Encoder1D(nn.Module):
         sample_points_num=32,
         act_fn="silu",
         double_z=True,
+        use_tangent=True,
     ):
         super().__init__()
         self.layers_per_block = layers_per_block
 
         self.conv_in = torch.nn.Conv1d(
-            in_channels,
-            block_out_channels[0],
+            in_channels = in_channels + 3 if use_tangent else in_channels,
+            out_channels = block_out_channels[0],
             kernel_size=3,
             stride=1,
             padding=1,
@@ -81,7 +82,11 @@ class Encoder1D(nn.Module):
 
         self.sample_points_num = sample_points_num
 
-    def forward(self, x):        
+    def forward(self, x): 
+        
+        tangents = point_seq_tangent(x)
+        x = torch.cat([x, tangents], dim=-2)
+
         sample = self.conv_in(x)
 
         # down
