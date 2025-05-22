@@ -44,6 +44,15 @@ class Encoder1D(nn.Module):
             padding=1,
         )
 
+        self.cross_attend = AttentionLayers(
+            dim = block_out_channels[0],
+            depth=2,
+            heads = 8,
+            cross_attend=True,
+            use_rmsnorm=True,
+            attn_flash=True,
+        )
+
         self.mid_block = None
         self.down_blocks = nn.ModuleList([])
 
@@ -85,7 +94,18 @@ class Encoder1D(nn.Module):
         tangents = point_seq_tangent(x, channel_dim=-2, seq_dim=-1)
         x = torch.cat([x, tangents], dim=-2)
 
-        sample = self.conv_in(x)
+        x = self.conv_in(x)
+
+        # cross for global information
+        B, C, num_points = x.shape
+        indices = torch.linspace(0, num_points - 1, self.sample_points_num, dtype=int)
+        sample = x[:, :, indices]
+        # from conv style to seq style
+        x = rearrange(x, 'b c n -> b n c')
+        sample = rearrange(sample, 'b c n -> b n c')
+        sample = self.cross_attend(sample, context=x)
+        # back to conv style
+        sample = rearrange(sample, 'b n c -> b c n')
 
         # down
         for down_block in self.down_blocks:
@@ -170,9 +190,6 @@ class Decoder1D(nn.Module):
             depth=2,
             heads = 8,
             cross_attend=True,
-            rotary_pos_emb=True,
-            gate_residual=True,
-            use_layerscale=True,
             attn_flash=True,
             only_cross=True,
         )
@@ -183,8 +200,7 @@ class Decoder1D(nn.Module):
 
 
     def forward(self, z, queries, latent_embeds=None):
-        sample = z
-        sample = self.conv_in(sample)
+        sample = self.conv_in(z)
 
         # middle
         sample = self.mid_block(sample, latent_embeds)
@@ -241,6 +257,7 @@ class AutoencoderKL1D(ModelMixin, ConfigMixin):
             act_fn=act_fn,
             norm_num_groups=norm_num_groups,
             double_z=True,
+            sample_points_num=sample_points_num,
         )
 
         # pass init params to Decoder

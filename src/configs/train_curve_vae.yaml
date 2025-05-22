@@ -23,7 +23,7 @@ wandb_run_name: test
 DATA:
     train_set_file_path: /studio/datasets/abc/dataset/curve_dataset/curve_train_dataset.npy
     val_set_file_path: /studio/datasets/abc/dataset/curve_dataset/curve_val_dataset.npy
-    replication: 1
+    replication: 10
     recon_dir_path: /studio/datasets/abc/recon/curves
 
 MODEL:

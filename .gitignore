@@ -174,3 +174,4 @@ cython_debug/
 .pypirc
 .vscode/
 tmp/
+wandb/
