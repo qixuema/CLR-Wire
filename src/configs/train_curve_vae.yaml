@@ -32,20 +32,20 @@ MODEL:
     latent_channels: 3
 
     down_block_types: [
-      'DownBlock1D', 'DownBlock1D', 'DownBlock1D', 'DownBlock1D'
+      'DownBlock1D', 'DownBlock1D'
     ]
     up_block_types: [
-      'UpBlock1D', 'UpBlock1D', 'UpBlock1D', 'UpBlock1D'
+      'UpBlock1D', 'UpBlock1D'
     ]
     
     block_out_channels: [
-      64, 128, 256, 512
+      128, 256
     ]
 
     layers_per_block: 2
     act_fn: 'silu'
     norm_num_groups: 32
-    sample_points_num: 64
+    sample_points_num: 16
 
     kl_weight: 0.000005
 
