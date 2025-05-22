@@ -17,8 +17,7 @@ from x_transformers.x_transformers import AttentionLayers
 from einops import rearrange
 
 from src.vae.modules import AutoencoderKLOutput, RandomFourierEmbed, UNetMidBlock1D, UpBlock1D
-from src.utils.torch_tools import interpolate_1d, calculate_polyline_lengths, sample_edge_points
-from src.utils.geometry import point_seq_tangent
+from src.utils.torch_tools import interpolate_1d, calculate_polyline_lengths, sample_edge_points, point_seq_tangent
 
 class Encoder1D(nn.Module):
     def __init__(
@@ -83,8 +82,7 @@ class Encoder1D(nn.Module):
         self.sample_points_num = sample_points_num
 
     def forward(self, x): 
-        
-        tangents = point_seq_tangent(x)
+        tangents = point_seq_tangent(x, channel_dim=-2, seq_dim=-1)
         x = torch.cat([x, tangents], dim=-2)
 
         sample = self.conv_in(x)
