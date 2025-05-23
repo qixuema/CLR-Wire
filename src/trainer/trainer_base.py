@@ -378,7 +378,7 @@ class BaseTrainer(Module):
 
                         total_val_loss += (loss / num_val_batches)
 
-                self.print(get_current_time() + f' valid loss: {total_val_loss:.3f}')    
+                self.print(get_current_time() + f' valid loss: {total_val_loss:.3e}')    
 
                 self.log(val_loss = total_val_loss)
 
