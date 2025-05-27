@@ -83,7 +83,7 @@ def curve_recon(
     # Initialize dataloader
     dataloader = DataLoader(
         dataset,
-        batch_size=256,
+        batch_size=128,
         shuffle=False,
         num_workers=32 if curve_vae_cfg.batch_size > 10 else curve_vae_cfg.batch_size, # use smaller of 10 or batch_size as num_workers
         pin_memory=True,
@@ -176,7 +176,7 @@ def curve_recon(
                 
                 save_vtx_adjs_zs(
                     vertices_i, adjs_i, zs, 
-                    uid, curve_vae_cfg.data.recon_dir_path, save_only_zs=True)
+                    uid, curve_vae_cfg.data.recon_dir_path, save_only_zs=False)
         else:
             raise ValueError(f"Invalid curve model type: {curve_model_type}")
 
