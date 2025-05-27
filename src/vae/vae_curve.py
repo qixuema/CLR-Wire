@@ -456,6 +456,7 @@ class AutoencoderKL1DFastDecode(ModelMixin, ConfigMixin):
         act_fn: str = "silu",
         latent_channels: int = 4,
         norm_num_groups: int = 32,
+        sample_points_num: int = 16,
         **kwargs,
     ):
         super().__init__()
@@ -472,6 +473,7 @@ class AutoencoderKL1DFastDecode(ModelMixin, ConfigMixin):
         )
 
         self.post_quant_conv =  nn.Conv1d(latent_channels, latent_channels, 1)
+        self.sample_points_num = sample_points_num
   
     def _decode(
         self, 
@@ -497,7 +499,7 @@ class AutoencoderKL1DFastDecode(ModelMixin, ConfigMixin):
         if t is None:
             device = z.device
             bs = z.shape[0]
-            t = torch.linspace(0, 1, 32, device=device).repeat(bs, 1)
+            t = torch.linspace(0, 1, self.sample_points_num, device=device).repeat(bs, 1)
 
         decoded = self._decode(z, t)
 
