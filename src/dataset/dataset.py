@@ -264,16 +264,23 @@ class CurveDataset(Dataset):
     
 
 class WireframeNormDataset(Dataset):
-    def __init__(self, dataset_path = '', correct_norm_curves = False):
+    def __init__(
+        self, 
+        dataset_path = '', 
+        correct_norm_curves = False,
+        shuffle_data = False,
+    ):
         super().__init__()
-        self.dataset = self._load_data(dataset_path)
         self.correct_norm_curves = correct_norm_curves
+        self.shuffle_data = shuffle_data
+        self.dataset = self._load_data(dataset_path)
 
     def _load_data(self, dataset_path):
         src_file_path_list_json = Path(dataset_path).joinpath('src_file_path_list.json')
         file_path_list = get_or_create_file_list_json(dataset_path, json_path=src_file_path_list_json, extension='.npz')
         
-        random.shuffle(file_path_list)
+        if self.shuffle_data:
+            random.shuffle(file_path_list)
         return file_path_list
 
     def __len__(self):
