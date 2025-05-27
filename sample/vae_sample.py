@@ -8,7 +8,6 @@ import os
 import sys
 import numpy as np
 from einops import rearrange, repeat
-# from src.inference.reconstruct import recon_and_save_wf_from_logits
 
 import logging
 from torch.utils.data import DataLoader
@@ -94,7 +93,7 @@ def curve_recon(
     logger.info("start reconstruction...")
     logger.info(f"num_iter: {len(dataloader)}")
 
-    for batch_idx, data in enumerate(dl_iter):        
+    for batch_idx, data in enumerate(dl_iter):
         uids, num_curves, vertices_list, adjs_list, norm_curves = (
             data['uid'], data['num_curves'], data['vertices'], data['adjs'], data['norm_curves']
         )
@@ -150,7 +149,7 @@ def curve_recon(
                 curves = denorm_curves(norm_curves_i, segments_i)
             
                 # Save the reconstructed edges points to a file
-                save_curves(curves, uid, curve_vae_cfg.data.recon_dir_path, save_png=False)
+                save_curves(curves, uid, curve_vae_cfg.data.recon_dir_path, save_png=True)
     
         elif curve_model_type == 'en':
             mu, std = output
