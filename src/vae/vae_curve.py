@@ -398,6 +398,7 @@ class AutoencoderKL1DFastEncode(ModelMixin, ConfigMixin):
         act_fn: str = "silu",
         latent_channels: int = 4,
         norm_num_groups: int = 32,
+        sample_points_num: int = 16,
         **kwargs,
     ):
         super().__init__()
@@ -412,6 +413,7 @@ class AutoencoderKL1DFastEncode(ModelMixin, ConfigMixin):
             act_fn=act_fn,
             norm_num_groups=norm_num_groups,
             double_z=True,
+            sample_points_num=sample_points_num,
         )
 
         self.quant_conv =  nn.Conv1d(2 * latent_channels, 2 * latent_channels, 1)

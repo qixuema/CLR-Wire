@@ -8,7 +8,7 @@ import os
 import sys
 import numpy as np
 from einops import rearrange, repeat
-
+from pathlib import Path
 import logging
 from torch.utils.data import DataLoader
 
@@ -57,6 +57,25 @@ def save_curves(
         tgt_png_file_path = tgt_png_dir + f'/{uid}.png'
         polylines_to_png(curves, filename=tgt_png_file_path)
 
+def save_vtx_adjs_zs(
+    vertices: np.ndarray,
+    adjs: np.ndarray,
+    zs: np.ndarray,
+    uuid: str,
+    tgt_dir_path: str,
+):
+    group_id = uuid[:3]
+    chunck_id = uuid[:4]
+    uid = uuid.split('_')[0]
+    tgt_dir_path = Path(tgt_dir_path).joinpath(group_id, chunck_id, uid)
+    tgt_dir_path.mkdir(parents=True, exist_ok=True)
+    tgt_file_path = tgt_dir_path.joinpath(f'{uuid}.npz')
+    np.savez(
+        tgt_file_path, 
+        vertices=vertices,
+        adjs=adjs,
+        zs=zs,
+    )
 
 def curve_recon(
     curve_vae_cfg: NestedDictToClass, 
@@ -167,12 +186,15 @@ def curve_recon(
                 uid = uids[i]
                 mu_i = mu[start_idx:end_idx]
                 std_i = std[start_idx:end_idx]
-
-                tgt_file_path = curve_vae_cfg.data.recon_dir_path + f'/{uid}.npy'
+                
+                vertices_i = vertices_list[i]
+                adjs_i = adjs_list[i]
                 
                 zs = np.concatenate([mu_i, std_i], axis=-1)
                 
-                np.save(tgt_file_path, zs)
+                save_vtx_adjs_zs(vertices_i, adjs_i, zs, uid, curve_vae_cfg.data.recon_dir_path)
+        else:
+            raise ValueError(f"Invalid curve model type: {curve_model_type}")
 
 
         logger.info(f"batch {batch_idx} done.")

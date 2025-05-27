@@ -4,6 +4,7 @@ import numpy as np
 from einops import rearrange
 import pickle
 from pathlib import Path
+import random
 
 from src.utils.helpers import (
     get_file_list, get_filename_wo_ext, get_file_list_with_extension, 
@@ -272,6 +273,7 @@ class WireframeNormDataset(Dataset):
         src_file_path_list_json = Path(dataset_path).joinpath('src_file_path_list.json')
         file_path_list = get_or_create_file_list_json(dataset_path, json_path=src_file_path_list_json, extension='.npz')
         
+        random.shuffle(file_path_list)
         return file_path_list
 
     def __len__(self):
