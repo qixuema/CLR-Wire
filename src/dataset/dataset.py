@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import Dataset
 import numpy as np
 from einops import rearrange
-
+import pickle
 
 from src.utils.helpers import (
     get_file_list, get_filename_wo_ext, get_file_list_with_extension, 
@@ -147,6 +147,7 @@ class LatentDataset(Dataset):
 
         return dict(zs=zs, context=context)
 
+
 class WireframeDataset(Dataset):
     def __init__(
         self, 
@@ -218,7 +219,6 @@ class WireframeDataset(Dataset):
         return curveset
 
 
-
 class CurveDataset(Dataset):
     def __init__(
         self, 
@@ -258,3 +258,42 @@ class CurveDataset(Dataset):
         vertices = torch.from_numpy(vertices).to(torch.float32)
 
         return vertices
+    
+
+class WireframeNormDataset(Dataset):
+    def __init__(
+        self, 
+        dataset_file_path = '',
+    ):
+        super().__init__()
+        self.dataset = self._load_data(dataset_file_path)
+
+    def _load_data(self, dataset_file_path):
+        with open(dataset_file_path, 'rb') as f:
+            dataset = pickle.load(f)
+        return dataset
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        sample = self.dataset[idx]        
+
+        uid = sample['uid']
+        norm_curves = sample['norm_curves']
+        vertices = sample['vertices']
+        adjs = sample['adjs']        
+
+        num_curves = norm_curves.shape[0]
+
+        norm_curves = torch.from_numpy(norm_curves).to(torch.float32)
+
+        sample = {
+            'uid': uid, 
+            'num_curves': num_curves,
+            'vertices': vertices,
+            'adjs': adjs,
+            'norm_curves': norm_curves
+        }        
+
+        return sample

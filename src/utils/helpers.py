@@ -2,6 +2,8 @@ import os
 import sys
 from pathlib import Path
 import datetime
+import logging
+
 
 def first(it):
     return it[0]
@@ -93,3 +95,9 @@ def get_all_directories(root_path):
 
 def filter_none_results(results):
     return [result for result in results if result is not None]
+
+def setup_logging():
+    logging.basicConfig(
+        level=logging.INFO,  # Change to DEBUG for more verbose output
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )

@@ -23,8 +23,9 @@ wandb_run_name: test
 DATA:
     train_set_file_path: /studio/datasets/abc/dataset/curve_dataset/curve_train_dataset.npy
     val_set_file_path: /studio/datasets/abc/dataset/curve_dataset/curve_val_dataset.npy
-    replication: 20
+    replication: 5
     recon_dir_path: /studio/datasets/abc/recon/curves
+    recon_wireframe_norm_file_path: /studio/datasets/abc/dataset/wireframe_dataset/wireframe_test_dataset_norm.pkl
 
 MODEL:
     in_channels: 3

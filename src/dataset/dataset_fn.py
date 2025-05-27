@@ -2,12 +2,13 @@ import numpy as np
 from scipy.spatial import ConvexHull
 from concurrent.futures import ThreadPoolExecutor
 import random
+import torch
 
 from src.utils.numpy_tools import (
     rotation_matrix_x, rotation_matrix_y, rotation_matrix_z
 )
 
-
+from src.utils.helpers import first
 def random_viewpoint():
     theta = np.random.uniform(np.radians(20), np.radians(110))
     phi = np.random.uniform(0, 2 * np.pi)
@@ -194,3 +195,27 @@ def aug_pc_by_idx(pc, idx):
     pc = np.concatenate([points, normals], axis=1)
     
     return pc
+
+def curve_to_mean_custom_collate(data, pad_id = -1):
+    is_dict = isinstance(first(data), dict)
+
+    if is_dict:
+        keys = first(data).keys()
+        data = [d.values() for d in data]
+
+    output = []
+
+    for key, datum in zip(keys,  zip(*data)):
+        if key == 'norm_curves':
+            datum = torch.concatenate(datum, dim=0)
+        else:
+            datum = list(datum)
+
+        output.append(datum)
+
+    output = tuple(output)
+
+    if is_dict:
+        output = dict(zip(keys, output))
+
+    return output
