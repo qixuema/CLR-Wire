@@ -25,7 +25,7 @@ DATA:
     val_set_file_path: /studio/datasets/abc/dataset/curve_dataset/curve_val_dataset.npy
     replication: 5
     recon_dir_path: /studio/datasets/abc/recon/curves
-    recon_wireframe_norm_file_path: /studio/datasets/abc/dataset/wireframe_dataset/wireframe_test_dataset_norm.pkl
+    recon_wireframe_norm_file_path: /studio/datasets/abc/dataset/wireframe_dataset/aug48_curve_wireframe_dataset
 
 MODEL:
     in_channels: 3

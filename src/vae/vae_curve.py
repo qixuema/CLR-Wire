@@ -434,17 +434,15 @@ class AutoencoderKL1DFastEncode(ModelMixin, ConfigMixin):
         **kwargs,
     ) -> Union[DecoderOutput, torch.FloatTensor]:
 
-        data = sample_edge_points(data, 32) # should we downsample the data to 32 points?
-
         data = rearrange(data, "b n c -> b c n") # for conv1d input
 
         posterior = self.encode(data).latent_dist
-        z = posterior.mode()
+        mu = posterior.mode()
 
         if return_std:
-            return z, posterior.std
+            return mu, posterior.std
 
-        return z
+        return mu
 
 class AutoencoderKL1DFastDecode(ModelMixin, ConfigMixin):
 
