@@ -3,14 +3,16 @@ from torch.utils.data import Dataset
 import numpy as np
 from einops import rearrange
 import pickle
+from pathlib import Path
 
 from src.utils.helpers import (
     get_file_list, get_filename_wo_ext, get_file_list_with_extension, 
+    get_or_create_file_list_json,
 )
 from src.dataset.dataset_fn import (
     scale_and_jitter_pc, scale_and_jitter_wireframe_set, curve_yz_scale,
     random_viewpoint, hidden_point_removal,
-    aug_pc_by_idx,
+    aug_pc_by_idx, gaussian_smooth_curve,
 )
 
 class LatentDataset(Dataset):
@@ -261,35 +263,38 @@ class CurveDataset(Dataset):
     
 
 class WireframeNormDataset(Dataset):
-    def __init__(
-        self, 
-        dataset_file_path = '',
-    ):
+    def __init__(self, dataset_path = '', correct_norm_curves = False):
         super().__init__()
-        self.dataset = self._load_data(dataset_file_path)
+        self.dataset = self._load_data(dataset_path)
+        self.correct_norm_curves = correct_norm_curves
 
-    def _load_data(self, dataset_file_path):
-        with open(dataset_file_path, 'rb') as f:
-            dataset = pickle.load(f)
-        return dataset
+    def _load_data(self, dataset_path):
+        src_file_path_list_json = Path(dataset_path).joinpath('src_file_path_list.json')
+        file_path_list = get_or_create_file_list_json(dataset_path, json_path=src_file_path_list_json, extension='.npz')
+        
+        return file_path_list
 
     def __len__(self):
         return len(self.dataset)
 
     def __getitem__(self, idx):
-        sample = self.dataset[idx]        
+        sample_path = self.dataset[idx]        
+        sample = np.load(sample_path)
 
-        uid = sample['uid']
+        uuid = get_filename_wo_ext(sample_path)
         norm_curves = sample['norm_curves']
         vertices = sample['vertices']
         adjs = sample['adjs']        
+
+        if self.correct_norm_curves:
+            norm_curves = gaussian_smooth_curve(norm_curves)
 
         num_curves = norm_curves.shape[0]
 
         norm_curves = torch.from_numpy(norm_curves).to(torch.float32)
 
         sample = {
-            'uid': uid, 
+            'uid': uuid, 
             'num_curves': num_curves,
             'vertices': vertices,
             'adjs': adjs,

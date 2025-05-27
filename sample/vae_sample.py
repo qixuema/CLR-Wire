@@ -75,7 +75,8 @@ def curve_recon(
     # load dataset
     logger.info("load dataset...")
     dataset = WireframeNormDataset(
-        dataset_file_path=curve_vae_cfg.data.recon_wireframe_norm_file_path,
+        dataset_path=curve_vae_cfg.data.recon_wireframe_norm_file_path,
+        correct_norm_curves=True,
     )
 
     # Initialize dataloader
@@ -213,11 +214,14 @@ def main(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="VAE Reconstruction")
-    parser.add_argument("--is_curve_recon", type=int, required=False, help="Is curve recon", default=1)
-    parser.add_argument("--curve_vae_config", type=str, required=False, help="Path to curve VAE config file.",
+    parser.add_argument("-r","--is_curve_recon", type=int, required=False, help="Is curve recon", default=1)
+    parser.add_argument("-c","--curve_vae_config", type=str, required=False, help="Path to curve VAE config file.",
                         default="src/configs/train_curve_vae.yaml")
-    parser.add_argument("--wireframe_vae_config", type=str, required=False, help="Path to wireframe VAE config file.",
+    parser.add_argument("-w","--wireframe_vae_config", type=str, required=False, help="Path to wireframe VAE config file.",
                         default="src/configs/train_wireframe_vae.yaml")
+    parser.add_argument("-ct","--curve_model_type", type=str, required=False, help="Curve model type", default="ae")
+    parser.add_argument("-wt","--wireframe_model_type", type=str, required=False, help="Wireframe model type", default="ae")
+    
     args, unknown = parser.parse_known_args()  # unknown contains any extra arguments    
      
     if unknown:
@@ -227,12 +231,22 @@ def parse_args() -> argparse.Namespace:
 
 
 if __name__ == "__main__":
-    wireframe_vae_cfg = parse_args()
-    curve_vae_cfg = load_config(wireframe_vae_cfg.curve_vae_config)
-    wireset_vae_cfg = load_config(wireframe_vae_cfg.wireframe_vae_config)
+    vae_cfg = parse_args()
+    curve_vae_cfg = load_config(vae_cfg.curve_vae_config)
+    wireset_vae_cfg = load_config(vae_cfg.wireframe_vae_config)
 
     curve_vae_args = NestedDictToClass(curve_vae_cfg)
     wireset_vae_args = NestedDictToClass(wireset_vae_cfg)
 
-    is_curve_recon = wireframe_vae_cfg.is_curve_recon == 1
-    main(curve_vae_args, wireset_vae_args, device_idx=0, is_curve_recon=is_curve_recon)
+    curve_model_type = vae_cfg.curve_model_type
+    wireframe_model_type = vae_cfg.wireframe_model_type
+
+    is_curve_recon = vae_cfg.is_curve_recon == 1
+    main(
+        curve_vae_args, 
+        wireset_vae_args, 
+        device_idx=0, 
+        is_curve_recon=is_curve_recon,
+        curve_model_type=curve_model_type,
+        wireframe_model_type=wireframe_model_type,
+    )
