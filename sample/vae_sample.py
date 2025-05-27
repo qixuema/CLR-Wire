@@ -45,16 +45,18 @@ def save_curves(
     curves: np.ndarray,
     uid: str,
     tgt_dir_path: str,
+    save_png: bool = False,
 ):
     tgt_npy_dir = tgt_dir_path + '/npy'
     os.makedirs(tgt_npy_dir, exist_ok=True)
     tgt_file_path = tgt_npy_dir + f'/{uid}.npy'
     np.save(tgt_file_path, curves)
     
-    tgt_png_dir = tgt_dir_path + '/png'
-    os.makedirs(tgt_png_dir, exist_ok=True)
-    tgt_png_file_path = tgt_png_dir + f'/{uid}.png'
-    polylines_to_png(curves, filename=tgt_png_file_path)
+    if save_png:
+        tgt_png_dir = tgt_dir_path + '/png'
+        os.makedirs(tgt_png_dir, exist_ok=True)
+        tgt_png_file_path = tgt_png_dir + f'/{uid}.png'
+        polylines_to_png(curves, filename=tgt_png_file_path)
 
 
 def curve_recon(
@@ -80,7 +82,7 @@ def curve_recon(
     # Initialize dataloader
     dataloader = DataLoader(
         dataset,
-        batch_size=10,
+        batch_size=100,
         shuffle=False,
         num_workers=10 if curve_vae_cfg.batch_size > 10 else curve_vae_cfg.batch_size, # use smaller of 10 or batch_size as num_workers
         pin_memory=True,
@@ -88,11 +90,11 @@ def curve_recon(
         collate_fn=curve_to_mean_custom_collate,
     )
     
-    dl_iter = cycle(dataloader)
-    
+    dl_iter = dataloader
     logger.info("start reconstruction...")
+    logger.info(f"num_iter: {len(dataloader)}")
 
-    for data in dl_iter:        
+    for batch_idx, data in enumerate(dl_iter):        
         uids, num_curves, vertices_list, adjs_list, norm_curves = (
             data['uid'], data['num_curves'], data['vertices'], data['adjs'], data['norm_curves']
         )
@@ -148,8 +150,7 @@ def curve_recon(
                 curves = denorm_curves(norm_curves_i, segments_i)
             
                 # Save the reconstructed edges points to a file
-                save_curves(curves, uid, curve_vae_cfg.data.recon_dir_path)
-                logger.info(f"save {uid} done.")
+                save_curves(curves, uid, curve_vae_cfg.data.recon_dir_path, save_png=False)
     
         elif curve_model_type == 'en':
             mu, std = output
@@ -172,6 +173,9 @@ def curve_recon(
                 zs = np.concatenate([mu_i, std_i], axis=-1)
                 
                 np.save(tgt_file_path, zs)
+
+
+        logger.info(f"batch {batch_idx} done.")
 
     exit()
 
