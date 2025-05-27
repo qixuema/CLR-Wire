@@ -3,6 +3,8 @@ from scipy.spatial import ConvexHull
 from concurrent.futures import ThreadPoolExecutor
 import random
 import torch
+from scipy.ndimage import gaussian_filter1d
+
 
 from src.utils.numpy_tools import (
     rotation_matrix_x, rotation_matrix_y, rotation_matrix_z
@@ -219,3 +221,12 @@ def curve_to_mean_custom_collate(data, pad_id = -1):
         output = dict(zip(keys, output))
 
     return output
+
+def gaussian_smooth_curve(points, sigma=1.0):
+    points = np.array(points)
+    points_smoothed = gaussian_filter1d(points.astype(np.float32), sigma=sigma, axis=-2)
+    
+    # set the first and last points to be the same as the original points
+    points_smoothed[...,0,:] = points[...,0,:]
+    points_smoothed[..., -1,:] = points[..., -1,:]
+    return points_smoothed
