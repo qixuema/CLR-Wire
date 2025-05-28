@@ -44,7 +44,7 @@ MODEL:
     
     use_mlp_predict: false
 
-    flag_bce_loss_weight: 1.
+    cls_ce_loss_weight: 1.
     segment_ce_loss_weight: 50.
     col_diff_ce_loss_weight: 1.
     row_diff_ce_loss_weight: 1.
