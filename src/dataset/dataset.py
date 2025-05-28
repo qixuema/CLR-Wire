@@ -191,10 +191,10 @@ class WireframeDataset(Dataset):
         idx = idx % len(self.data)
         sample_path = self.data[idx]
 
-        with np.load(sample_path) as sample:
-            adjs = sample['adjs']
-            vertices = sample['vertices']
-            curve_latent = sample['zs']
+        sample = np.load(sample_path)
+        adjs = sample['adjs']
+        vertices = sample['vertices']
+        curve_latent = sample['zs']
         
         num_lines = adjs.shape[0]
         diffs = compute_diffs(adjs)
