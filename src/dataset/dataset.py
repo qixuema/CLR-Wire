@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import Dataset
 import numpy as np
 from einops import rearrange
-import pickle
+import json
 from pathlib import Path
 import random
 
@@ -13,7 +13,7 @@ from src.utils.helpers import (
 from src.dataset.dataset_fn import (
     scale_and_jitter_pc, scale_and_jitter_wireframe_set, curve_yz_scale,
     random_viewpoint, hidden_point_removal,
-    aug_pc_by_idx, gaussian_smooth_curve,
+    aug_pc_by_idx, gaussian_smooth_curve, compute_diffs,
 )
 
 class LatentDataset(Dataset):
@@ -50,7 +50,7 @@ class LatentDataset(Dataset):
         self.point_num = point_num
 
         eval_mode = not is_train
-        if sample or eval_mode:
+        if self.sample or eval_mode:
             self.transform = None
 
         self.data = self._load_data(dataset_file_path)
@@ -174,10 +174,11 @@ class WireframeDataset(Dataset):
         self.data = self._load_data(dataset_file_path)
         print(f'load {len(self.data)} valid data')
         
-    def _load_data(self, data_path):
-        file_list = get_file_list_with_extension(data_path, '.npz')
-       
-        return file_list
+    def _load_data(self, dataset_path):
+        with open(dataset_path, 'r') as f:
+            file_path_list = json.load(f)
+        
+        return file_path_list
 
     def __len__(self):
         if self.is_train != True:
@@ -191,12 +192,16 @@ class WireframeDataset(Dataset):
         sample_path = self.data[idx]
 
         with np.load(sample_path) as sample:
-            diffs = sample['diffs']
-            segments = sample['segments']
-            curve_latent = sample['curve_latent']
+            adjs = sample['adjs']
+            vertices = sample['vertices']
+            curve_latent = sample['zs']
         
-        num_lines = segments.shape[0]
-        
+        num_lines = adjs.shape[0]
+        diffs = compute_diffs(adjs)
+        segments = vertices[adjs]
+
+        curve_latent = rearrange(curve_latent, 'n h (block w) -> n (block h w)', block=2, w=3)
+
         if self.transform is not None:
             segments = self.transform(segments)        
         
@@ -207,17 +212,23 @@ class WireframeDataset(Dataset):
         xs = np.pad(xs, ((0, padding_cols), (0, 0)), mode='constant', constant_values=0)
         diffs = np.pad(diffs, ((0, padding_cols), (0, 0)), mode='constant', constant_values=0)
         
+        valid_flag = np.ones(self.max_num_lines, dtype=np.int8)[:, np.newaxis]
+        valid_flag[num_lines:] = 0  # from nth line to the end, set to 0
+
+        flag_diffs = np.concatenate([valid_flag, diffs], axis=-1)
+        
         xs = torch.from_numpy(xs).to(torch.float32)
-        diffs = torch.from_numpy(diffs).to(torch.long)        
+        flag_diffs = torch.from_numpy(flag_diffs).to(torch.long)        
 
         curveset = {
             'xs': xs,
-            'flag_diffs': diffs, 
+            'flag_diffs': flag_diffs, 
         }
+        
         if self.sample:
-            folder_name = sample_path.split('/')[-2]
-            uid = get_filename_wo_ext(sample_path)
-            curveset['uid'] = f'{folder_name}_{uid}'
+            # folder_name = sample_path.split('/')[-2]
+            uuid = get_filename_wo_ext(sample_path)
+            curveset['uid'] = f'{uuid}'
 
         return curveset
 
