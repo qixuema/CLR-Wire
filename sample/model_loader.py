@@ -49,20 +49,16 @@ def load_wireset_vae(args: Any, model_type: str, device: torch.device):
         max_row_diff=args.model.max_row_diff,
         max_col_diff=args.model.max_col_diff,
         max_curves_num=args.model.max_curves_num,
-        wireset_latent_num=args.model.wireset_latent_num,
+        wireframe_latent_num=args.model.wireframe_latent_num,
         label_smoothing=args.label_smoothing,
-        flag_bce_loss_weight=args.model.flag_bce_loss_weight,
+        cls_ce_loss_weight=args.model.cls_ce_loss_weight,
         segment_ce_loss_weight=args.model.segment_ce_loss_weight,
         col_diff_ce_loss_weight=args.model.col_diff_ce_loss_weight,
         row_diff_ce_loss_weight=args.model.row_diff_ce_loss_weight,
         curve_latent_loss_weight=args.model.curve_latent_loss_weight,
         kl_loss_weight=args.model.kl_loss_weight,
-        use_pos_embedding=args.model.use_pos_embedding,
         curve_latent_embed_dim=args.model.curve_latent_embed_dim,
         use_mlp_predict=args.model.use_mlp_predict,
-        fix_std=args.model.fix_std if hasattr(args.model, 'fix_std') else False,
-        use_flag_embed=args.model.use_flag_embed if hasattr(args.model, 'use_flag_embed') else False,
-        is_64=args.model.is_64 if hasattr(args.model, 'is_64') else False,
     )
     checkpoint_path = f"{args.model.checkpoint_folder}/{args.model.checkpoint_file_name}"
     model = load_ema(model, checkpoint_path, strict=strict)

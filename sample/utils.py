@@ -1,3 +1,4 @@
+import os
 import numpy as np
 from typing import Optional
 import logging
@@ -175,3 +176,22 @@ def polylines_to_png(
     # plt.tight_layout()
     fig.savefig(filename, dpi=dpi)
     plt.close(fig)
+
+
+
+def save_curves(
+    curves: np.ndarray,
+    uid: str,
+    tgt_dir_path: str,
+    save_png: bool = False,
+):
+    tgt_npy_dir = tgt_dir_path + '/npy'
+    os.makedirs(tgt_npy_dir, exist_ok=True)
+    tgt_file_path = tgt_npy_dir + f'/{uid}.npy'
+    np.save(tgt_file_path, curves)
+    
+    if save_png:
+        tgt_png_dir = tgt_dir_path + '/png'
+        os.makedirs(tgt_png_dir, exist_ok=True)
+        tgt_png_file_path = tgt_png_dir + f'/{uid}.png'
+        polylines_to_png(curves, filename=tgt_png_file_path)

@@ -8,28 +8,12 @@ import logging
 from torch.utils.data import DataLoader
 
 from model_loader import load_curve_vae
-from utils import denorm_curves, polylines_to_png
+from utils import denorm_curves, polylines_to_png, save_curves
 
 from src.utils.config import NestedDictToClass
 from src.dataset.dataset_fn import curve_to_mean_custom_collate
 from src.dataset.dataset import WireframeNormDataset
 
-def save_curves(
-    curves: np.ndarray,
-    uid: str,
-    tgt_dir_path: str,
-    save_png: bool = False,
-):
-    tgt_npy_dir = tgt_dir_path + '/npy'
-    os.makedirs(tgt_npy_dir, exist_ok=True)
-    tgt_file_path = tgt_npy_dir + f'/{uid}.npy'
-    np.save(tgt_file_path, curves)
-    
-    if save_png:
-        tgt_png_dir = tgt_dir_path + '/png'
-        os.makedirs(tgt_png_dir, exist_ok=True)
-        tgt_png_file_path = tgt_png_dir + f'/{uid}.png'
-        polylines_to_png(curves, filename=tgt_png_file_path)
 
 def save_vtx_adjs_zs(
     vertices: np.ndarray,
