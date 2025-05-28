@@ -20,8 +20,8 @@ wandb_project_name: wireframe_vae
 wandb_run_name: test
 
 DATA:
-    train_set_file_path: /studio/datasets/abc/dataset/wireframe_dataset/train
-    val_set_file_path: /studio/datasets/abc/dataset/wireframe_dataset/val
+    train_set_file_path: /studio/datasets/abc/dataset/curve_latent_wireframe/train_file_path_list.json
+    val_set_file_path: /studio/datasets/abc/dataset/curve_latent_wireframe/val_file_path_list.json
     recon_dir_path: /studio/datasets/abc/recon/wireframe/
     replication: 1
 
