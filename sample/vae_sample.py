@@ -11,7 +11,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.
 from src.utils.config import load_config, NestedDictToClass
 from src.utils.helpers import setup_logging
 from curve_vae_recon import curve_recon
-
+from wireframe_vae_recon import wireframe_recon
 
 logger = logging.getLogger(__name__)
 setup_logging()
@@ -42,7 +42,7 @@ def main(
     if isDebug:
         curve_vae_cfg.batch_size = 1
         wireframe_vae_cfg.use_wandb_tracking = False
-        wireframe_vae_cfg.batch_size = 2048
+        wireframe_vae_cfg.batch_size = 16
 
     if is_curve_recon:
         curve_recon(
@@ -52,7 +52,7 @@ def main(
             logger=logger,
         )
     else:
-        wireset_recon(
+        wireframe_recon(
             wireframe_vae_cfg, 
             curve_vae_cfg, 
             wireframe_model_type=wireframe_model_type,
