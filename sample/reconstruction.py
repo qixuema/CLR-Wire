@@ -117,7 +117,7 @@ def recon_and_save_wireframe_from_logits(
         
         if use_adj_refine_segment:
             updated_preds, success = refine_segment_coords_by_adj(
-                adj_i, pred_segment_logits_i, is_softmax=False, check_var=check_valid,
+                adj_i, pred_segment_logits_i, check_var=check_valid,
             )
         else:
             updated_preds = pred_segment_logits_i
