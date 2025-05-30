@@ -378,7 +378,7 @@ class BaseTrainer(Module):
 
                         total_val_loss += (loss / num_val_batches)
 
-                self.print(get_current_time() + f' valid loss: {total_val_loss:.3f}')    
+                self.print(get_current_time() + f' valid loss: {total_val_loss:.3e}')    
 
                 self.log(val_loss = total_val_loss)
 
@@ -391,9 +391,8 @@ class BaseTrainer(Module):
 
                 self.print(get_current_time() + f' checkpoint saved at {self.checkpoint_folder / f"model-{milestone}.pt"}')
 
-            if divisible_by(step, self.num_step_per_epoch):
-                if self.is_main:
-                    print(get_current_time() + f' {step // self.num_step_per_epoch} epoch at ', step)                    
+            if self.is_main and divisible_by(step, self.num_step_per_epoch):
+                print(get_current_time() + f' {step // self.num_step_per_epoch} epoch at ', step)                    
 
             self.wait()
 

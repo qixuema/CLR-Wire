@@ -17,8 +17,7 @@ from x_transformers.x_transformers import AttentionLayers
 from einops import rearrange
 
 from src.vae.modules import AutoencoderKLOutput, RandomFourierEmbed, UNetMidBlock1D, UpBlock1D
-from src.utils.torch_tools import interpolate_1d, calculate_polyline_lengths, sample_edge_points
-
+from src.utils.torch_tools import interpolate_1d, calculate_polyline_lengths, sample_edge_points, point_seq_tangent
 
 class Encoder1D(nn.Module):
     def __init__(
@@ -32,16 +31,26 @@ class Encoder1D(nn.Module):
         sample_points_num=32,
         act_fn="silu",
         double_z=True,
+        use_tangent=True,
     ):
         super().__init__()
         self.layers_per_block = layers_per_block
 
         self.conv_in = torch.nn.Conv1d(
-            in_channels,
-            block_out_channels[0],
+            in_channels = in_channels + 3 if use_tangent else in_channels,
+            out_channels = block_out_channels[0],
             kernel_size=3,
             stride=1,
             padding=1,
+        )
+
+        self.cross_attend = AttentionLayers(
+            dim = block_out_channels[0],
+            depth=2,
+            heads = 8,
+            cross_attend=True,
+            use_rmsnorm=True,
+            attn_flash=True,
         )
 
         self.mid_block = None
@@ -81,8 +90,22 @@ class Encoder1D(nn.Module):
 
         self.sample_points_num = sample_points_num
 
-    def forward(self, x):        
-        sample = self.conv_in(x)
+    def forward(self, x): 
+        tangents = point_seq_tangent(x, channel_dim=-2, seq_dim=-1)
+        x = torch.cat([x, tangents], dim=-2)
+
+        x = self.conv_in(x)
+
+        # cross for global information
+        B, C, num_points = x.shape
+        indices = torch.linspace(0, num_points - 1, self.sample_points_num, dtype=int)
+        sample = x[:, :, indices]
+        # from conv style to seq style
+        x = rearrange(x, 'b c n -> b n c')
+        sample = rearrange(sample, 'b c n -> b n c')
+        sample = self.cross_attend(sample, context=x)
+        # back to conv style
+        sample = rearrange(sample, 'b n c -> b c n')
 
         # down
         for down_block in self.down_blocks:
@@ -167,9 +190,6 @@ class Decoder1D(nn.Module):
             depth=2,
             heads = 8,
             cross_attend=True,
-            rotary_pos_emb=True,
-            gate_residual=True,
-            use_layerscale=True,
             attn_flash=True,
             only_cross=True,
         )
@@ -180,8 +200,7 @@ class Decoder1D(nn.Module):
 
 
     def forward(self, z, queries, latent_embeds=None):
-        sample = z
-        sample = self.conv_in(sample)
+        sample = self.conv_in(z)
 
         # middle
         sample = self.mid_block(sample, latent_embeds)
@@ -238,6 +257,7 @@ class AutoencoderKL1D(ModelMixin, ConfigMixin):
             act_fn=act_fn,
             norm_num_groups=norm_num_groups,
             double_z=True,
+            sample_points_num=sample_points_num,
         )
 
         # pass init params to Decoder
@@ -414,17 +434,15 @@ class AutoencoderKL1DFastEncode(ModelMixin, ConfigMixin):
         **kwargs,
     ) -> Union[DecoderOutput, torch.FloatTensor]:
 
-        data = sample_edge_points(data, 32) # should we downsample the data to 32 points?
-
         data = rearrange(data, "b n c -> b c n") # for conv1d input
 
         posterior = self.encode(data).latent_dist
-        z = posterior.mode()
+        mu = posterior.mode()
 
         if return_std:
-            return z, posterior.std
+            return mu, posterior.std
 
-        return z
+        return mu
 
 class AutoencoderKL1DFastDecode(ModelMixin, ConfigMixin):
 

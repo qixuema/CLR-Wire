@@ -38,3 +38,5 @@ dependencies:
     - Deprecated
     - pytorch_custom_utils
     - torchdiffeq
+    - open3d
+    

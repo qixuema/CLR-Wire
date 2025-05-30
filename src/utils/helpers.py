@@ -2,6 +2,8 @@ import os
 import sys
 from pathlib import Path
 import datetime
+import logging
+import json
 
 def first(it):
     return it[0]
@@ -93,3 +95,35 @@ def get_all_directories(root_path):
 
 def filter_none_results(results):
     return [result for result in results if result is not None]
+
+def setup_logging():
+    logging.basicConfig(
+        level=logging.INFO,  # Change to DEBUG for more verbose output
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
+def get_or_create_file_list_json(dataset_dir_path, json_path, extension='.npz'):
+    """
+    Get or create a JSON file containing a list of files with a given extension under a directory.
+    If the JSON file exists, load the file list from it; otherwise, generate the file list and save to JSON.
+
+    Args:
+        dataset_dir_path (str): Path to the dataset directory.
+        json_path (str): Path to the JSON file to save/load the file list.
+        extension (str): File extension to search for (default: '.npz').
+
+    Returns:
+        list: List of file paths with the specified extension.
+    """
+
+    if not os.path.exists(json_path):
+        file_list = get_file_list_with_extension(dataset_dir_path, extension)
+        with open(json_path, 'w') as f:
+            json.dump(file_list, f)
+    else:
+        with open(json_path, 'r') as f:
+            file_list = json.load(f)
+    
+    file_list.sort()
+    
+    return file_list
