@@ -12,7 +12,7 @@ from diffusers.utils.accelerate_utils import apply_forward_hook
 from diffusers.models.modeling_utils import ModelMixin
 from diffusers.models.autoencoders.vae import DecoderOutput, DiagonalGaussianDistribution
 
-from src.vae.modules import AutoencoderKLOutput, MLP, AttentionLayerFactory, PointEmbed, FocalLoss
+from src.vae.modules import AutoencoderKLOutput, MLP, AttentionLayerFactory, PointEmbed, FocalLoss, ce_loss
 
 class EmbeddingLayerFactory:
     def __init__(
@@ -249,6 +249,7 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
         kl_loss_weight: float = 2e-4,
         curve_latent_embed_dim: int = 256,
         use_mlp_predict: bool = False,
+        use_focal_loss: bool = False,
         **kwargs,
     ):
         super().__init__()
@@ -305,8 +306,11 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
 
         # for loss function
         self.mse_loss_fn = torch.nn.MSELoss(reduction='none')
-        self.ce_loss_fn = torch.nn.CrossEntropyLoss(reduction='none')
         self.focal_loss = FocalLoss(gamma=2)
+        if use_focal_loss:
+            self.ce_loss = self.focal_loss
+        else:
+            self.ce_loss = ce_loss
         
         self.cls_ce_loss_weight = cls_ce_loss_weight
         self.segment_mse_loss_weight = segment_mse_loss_weight
@@ -455,7 +459,7 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
 
         # ================== cls ce loss =================
 
-        cls_ce_loss = self.focal_loss(
+        cls_ce_loss = self.ce_loss(
             pred_cls_logits, 
             cls, 
             reduction='mean',
@@ -476,23 +480,22 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
         rearranged_logits = rearrange(pred_diffs_logits, 'b ... c -> b c (...)')
         
         pred_col_diff_logits, pred_row_diff_logits = rearranged_logits.split([self.max_col_diff, rearranged_logits.shape[1] - self.max_col_diff], dim=1)
-
         
-        col_diff_ce_loss = self.focal_loss(
+        col_diff_ce_loss = self.ce_loss(
             pred_col_diff_logits, 
             diffs[..., 0],
             num_classes=self.max_col_diff,
             label_smoothing=self.label_smoothing,
-            class_weights=self.col_diff_class_weights,
+            weight=self.col_diff_class_weights,
             reduction='none',
         )
         
-        row_diff_ce_loss = self.focal_loss(
+        row_diff_ce_loss = self.ce_loss(
             pred_row_diff_logits, 
             diffs[..., 1],
             num_classes=self.max_row_diff,
             label_smoothing=self.label_smoothing,
-            class_weights=self.row_diff_class_weights,
+            weight=self.row_diff_class_weights,
             reduction='none',
         )
         
