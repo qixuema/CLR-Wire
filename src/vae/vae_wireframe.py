@@ -291,10 +291,10 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
             dim = attn_dim
             
             expansion_factor = 1.0
-            self.predict_cls = MLP(in_dim=dim, out_dim=max_curves_num, expansion_factor=expansion_factor, dropout=0.2)
-            self.predict_diffs = MLP(in_dim=dim, out_dim=max_col_diff+max_row_diff, expansion_factor=expansion_factor, dropout=0.2)
-            self.predict_segments = MLP(in_dim=dim, out_dim=6, expansion_factor=expansion_factor, dropout=0.2)
-            self.predict_curve_latent = MLP(in_dim=dim, out_dim=12, expansion_factor=expansion_factor, dropout=0.2) 
+            self.predict_cls = MLP(in_dim=dim, out_dim=max_curves_num, expansion_factor=expansion_factor, dropout=0.1)
+            self.predict_diffs = MLP(in_dim=dim, out_dim=max_col_diff+max_row_diff, expansion_factor=expansion_factor, dropout=0.1)
+            self.predict_segments = MLP(in_dim=dim, out_dim=6, expansion_factor=expansion_factor)
+            self.predict_curve_latent = MLP(in_dim=dim, out_dim=12, expansion_factor=expansion_factor) 
         else:
             out_dim = 6 + 6 + 32 + 12 # num_segments + num_col_diffs + num_row_diffs + num_curve_latent
             self.predict_cls = nn.Linear(attn_dim, max_curves_num)
