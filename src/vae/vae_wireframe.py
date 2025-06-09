@@ -241,10 +241,10 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
         max_curves_num: int = 128,
         wireframe_latent_num: int = 64,
         label_smoothing: float = 0.005,
-        cls_ce_loss_weight: float = 1.,
-        segment_mse_loss_weight: float = 1.,
-        col_diff_ce_loss_weight: float = 1.,
-        row_diff_ce_loss_weight: float = 1.,
+        cls_loss_weight: float = 1.,
+        segment_loss_weight: float = 1.,
+        col_diff_loss_weight: float = 1.,
+        row_diff_loss_weight: float = 1.,
         curve_latent_loss_weight: float = 1.,
         kl_loss_weight: float = 2e-4,
         curve_latent_embed_dim: int = 256,
@@ -312,10 +312,10 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
         else:
             self.ce_loss = ce_loss
         
-        self.cls_ce_loss_weight = cls_ce_loss_weight
-        self.segment_mse_loss_weight = segment_mse_loss_weight
-        self.col_diff_ce_loss_weight = col_diff_ce_loss_weight
-        self.row_diff_ce_loss_weight = row_diff_ce_loss_weight
+        self.cls_loss_weight = cls_loss_weight
+        self.segment_loss_weight = segment_loss_weight
+        self.col_diff_loss_weight = col_diff_loss_weight
+        self.row_diff_loss_weight = row_diff_loss_weight
         self.curve_latent_loss_weight = curve_latent_loss_weight
         self.kl_loss_weight = kl_loss_weight
 
@@ -595,10 +595,10 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
             
             new_kl_loss_weight = self.kl_loss_weight
             
-            loss = (self.cls_ce_loss_weight*cls_ce_loss
-                + self.segment_mse_loss_weight*segment_mse_loss
-                + self.col_diff_ce_loss_weight*col_diff_ce_loss 
-                + self.row_diff_ce_loss_weight*row_diff_ce_loss 
+            loss = (self.cls_loss_weight*cls_ce_loss
+                + self.segment_loss_weight*segment_mse_loss
+                + self.col_diff_loss_weight*col_diff_ce_loss 
+                + self.row_diff_loss_weight*row_diff_ce_loss 
                 + self.curve_latent_loss_weight*curve_latent_loss
                 + new_kl_loss_weight*kl_loss
             )

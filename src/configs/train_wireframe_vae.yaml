@@ -42,12 +42,12 @@ MODEL:
     attn_dim: 768
     num_heads: 12
     
-    use_mlp_predict: false
+    use_mlp_predict: true
 
-    cls_ce_loss_weight: 1.
-    segment_ce_loss_weight: 50.
-    col_diff_ce_loss_weight: 1.
-    row_diff_ce_loss_weight: 1.
+    cls_loss_weight: 1.
+    segment_loss_weight: 50.
+    col_diff_loss_weight: 1.
+    row_diff_loss_weight: 1.
     curve_latent_loss_weight: 50.
     kl_loss_weight: 0.000035
     
