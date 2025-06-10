@@ -255,7 +255,7 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
         curve_latent_embed_dim: int = 256,
         use_mlp_predict: bool = False,
         use_focal_loss: bool = False,
-        **kwargs,
+        # **kwargs,
     ):
         super().__init__()
         
