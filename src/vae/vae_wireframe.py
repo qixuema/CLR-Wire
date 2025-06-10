@@ -174,6 +174,7 @@ class Decoder1D(Module):
             cross_depth = 2,
         ),
         max_curves_num = 128,
+        wireframe_latent_num = 64,
     ):
         super().__init__()
         
@@ -183,7 +184,9 @@ class Decoder1D(Module):
 
         self.proj_in = nn.Linear(in_channels, attn_dim)
 
-        self.dec_learnable_query = nn.Parameter(torch.randn(1 + max_curves_num, attn_dim))            
+        self.pos_emb = nn.Parameter(torch.randn(wireframe_latent_num, attn_dim))
+
+        self.dec_learnable_query = nn.Parameter(torch.randn(1 + max_curves_num, attn_dim))
         
         attn_factory = AttentionLayerFactory()
         
@@ -208,6 +211,8 @@ class Decoder1D(Module):
     ):
         bs = zs.shape[0]
         wireframe_latent = self.proj_in(zs)
+
+        wireframe_latent = self.pos_emb + wireframe_latent
 
         # self attn
         
