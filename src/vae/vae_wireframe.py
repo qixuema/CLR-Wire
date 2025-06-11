@@ -595,8 +595,15 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
                 xs_mask=xs_mask,
                 preds=preds,
             )
-
-            a, b, c = (0.25, 0.733, 6.955)
+            
+            all_losses = dict(
+                cls_ce_loss=cls_ce_loss,
+                segment_mse_loss=segment_mse_loss,
+                col_diff_ce_loss=col_diff_ce_loss,
+                row_diff_ce_loss=row_diff_ce_loss,
+                curve_latent_loss=curve_latent_loss,
+                kl_loss=kl_loss,
+            )
             
             new_kl_loss_weight = self.kl_loss_weight
             
@@ -607,15 +614,12 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
                 + self.curve_latent_loss_weight*curve_latent_loss
                 + new_kl_loss_weight*kl_loss
             )
+            
+            
+            all_losses['mu'] = posterior.mean.mean()
+            all_losses['std'] = posterior.std.mean()
 
-            return loss, dict(
-                cls_ce_loss=cls_ce_loss,
-                segment_mse_loss=segment_mse_loss,
-                col_diff_ce_loss=col_diff_ce_loss,
-                row_diff_ce_loss=row_diff_ce_loss,
-                curve_latent_loss=curve_latent_loss,
-                kl_loss=kl_loss,
-            )
+            return loss, all_losses
         
         return preds
 
