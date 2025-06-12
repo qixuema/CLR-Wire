@@ -175,16 +175,19 @@ class Decoder1D(Module):
         ),
         max_curves_num = 128,
         wireframe_latent_num = 64,
+        use_latent_pos_emb: bool = False,
     ):
         super().__init__()
         
         self.max_curves_num = max_curves_num
+        self.use_latent_pos_emb = use_latent_pos_emb
 
         attn_dim = attn_kwargs['dim']
 
         self.proj_in = nn.Linear(in_channels, attn_dim)
 
-        self.pos_emb = nn.Parameter(torch.randn(wireframe_latent_num, attn_dim))
+        if self.use_latent_pos_emb:
+            self.pos_emb = nn.Parameter(torch.randn(wireframe_latent_num, attn_dim))
 
         self.dec_learnable_query = nn.Parameter(torch.randn(1 + max_curves_num, attn_dim))
         
@@ -212,7 +215,8 @@ class Decoder1D(Module):
         bs = zs.shape[0]
         wireframe_latent = self.proj_in(zs)
 
-        wireframe_latent = self.pos_emb + wireframe_latent
+        if self.use_latent_pos_emb:
+            wireframe_latent = self.pos_emb + wireframe_latent
 
         # self attn
         
@@ -255,6 +259,7 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
         curve_latent_embed_dim: int = 256,
         use_mlp_predict: bool = False,
         use_focal_loss: bool = False,
+        use_latent_pos_emb: bool = False,
         # **kwargs,
     ):
         super().__init__()
@@ -288,6 +293,7 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
             in_channels=latent_channels, 
             attn_kwargs=attn_kwargs,
             max_curves_num=max_curves_num,
+            use_latent_pos_emb=use_latent_pos_emb,
         )
         
         

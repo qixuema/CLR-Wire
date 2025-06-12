@@ -56,6 +56,7 @@ model = MyModel(
     kl_loss_weight=args.model.kl_loss_weight,
     curve_latent_embed_dim=args.model.curve_latent_embed_dim,
     use_mlp_predict=args.model.use_mlp_predict,
+    use_latent_pos_emb=args.model.use_latent_pos_emb,
 )
 
 
