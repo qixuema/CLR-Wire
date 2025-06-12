@@ -616,7 +616,7 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
             )
             
             
-            all_losses['mu'] = posterior.mean.mean()
+            all_losses['mu'] = posterior.mean.abs().mean()
             all_losses['std'] = posterior.std.mean()
 
             return loss, all_losses
