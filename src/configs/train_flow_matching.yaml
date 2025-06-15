@@ -2,7 +2,7 @@ resume_training: false
 from_start: false
 
 epochs: 100
-batch_size: 256
+batch_size: 512
 lr: 0.0001
 
 num_workers: 64
@@ -43,7 +43,7 @@ MODEL:
 
     latent_num: 64
 
-    condition_on_points: true
+    condition_on_points: false
     condition_on_img: false
 
     checkpoint_folder: checkpoints/checkpoints_flow_matching

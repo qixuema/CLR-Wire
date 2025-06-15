@@ -2,8 +2,8 @@ resume_training: false
 from_start: false
 
 epochs: 100
-batch_size: 384
-lr: 0.0001
+batch_size: 256
+lr: 0.0003
 label_smoothing: 0.005
 
 num_workers: 64
@@ -43,13 +43,14 @@ MODEL:
     num_heads: 12
     
     use_mlp_predict: true
+    use_latent_pos_emb: false
 
     cls_loss_weight: 1.
-    segment_loss_weight: 50.
+    segment_loss_weight: 100.
     col_diff_loss_weight: 1.
     row_diff_loss_weight: 1.
-    curve_latent_loss_weight: 50.
-    kl_loss_weight: 0.000035
+    curve_latent_loss_weight: 20.
+    kl_loss_weight: 0.00001
     
     checkpoint_folder: checkpoints/checkpoints_wireframe_vae
     checkpoint_file_name: model-100.pt
