@@ -185,11 +185,8 @@ class DiT(nn.Module):
       
         # self.pos_embed = nn.Parameter(torch.randn(latent_num, hidden_size))
 
-        attn_drop = 0.3 
-        proj_drop = 0.2
-
         self.blocks = nn.ModuleList([
-            Block(hidden_size, num_heads, mlp_ratio=mlp_ratio, attn_drop=attn_drop, proj_drop=proj_drop) for _ in range(depth)
+            Block(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
 
         self.final_layer = FinalLayer(hidden_size, self.out_channels)
