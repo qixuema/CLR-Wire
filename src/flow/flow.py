@@ -183,7 +183,7 @@ class DiT(nn.Module):
 
         self.t_embedder = TimestepEmbedder(hidden_size, output_size=hidden_size)
       
-        self.pos_embed = nn.Parameter(torch.randn(latent_num, hidden_size))
+        # self.pos_embed = nn.Parameter(torch.randn(latent_num, hidden_size))
 
         attn_drop = 0.3 
         proj_drop = 0.2
@@ -266,7 +266,8 @@ class DiT(nn.Module):
         """
 
 
-        x = self.x_embedder(x) + self.pos_embed  # (N, T, D), where T = H * W / patch_size ** 2
+        # x = self.x_embedder(x) + self.pos_embed  # (N, T, D), where T = H * W / patch_size ** 2
+        x = self.x_embedder(x)
         t = self.t_embedder(t)                   # (N, D)
         
         if self.condition_on_points:
