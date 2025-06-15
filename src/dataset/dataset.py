@@ -53,7 +53,7 @@ class LatentDataset(Dataset):
         if self.sample or eval_mode:
             self.transform = None
 
-        self.data = self._load_data(dataset_file_path)
+        self.data, self.uids = self._load_data(dataset_file_path)
         
         print(f'load {len(self.data)} data')
         
@@ -67,9 +67,10 @@ class LatentDataset(Dataset):
         
 
     def _load_data(self, data_path):
-        file_list = get_file_list(data_path)
-        
-        return file_list
+        dataset = np.load(data_path, allow_pickle=True)
+        data = dataset['data']
+        uids = dataset['uids']
+        return data, uids
 
     def __len__(self):
         if self.is_train != True:
@@ -134,21 +135,25 @@ class LatentDataset(Dataset):
             img_latent = torch.from_numpy(img_latent).to(torch.float32)
             context = img_latent
         else:
-            wireframe_zs_file_path = self.data[idx]
+            wireframe_zs = self.data[idx]
             context = None
 
-        mu_and_std = np.load(wireframe_zs_file_path)['zs']
-        mu = mu_and_std[:,:16]
-        std = mu_and_std[:,16:]
+        mu = wireframe_zs[:,:16]
+        std = wireframe_zs[:,16:]
         zs = mu + std * np.random.randn(*std.shape)
             
         zs = torch.from_numpy(zs).to(torch.float32)
 
+        payload = dict(zs=zs)
+        
+        if context is not None:
+            payload['context'] = context
+    
         if self.sample:
-            uid = get_filename_wo_ext(wireframe_zs_file_path)
-            return dict(zs=zs, context=context, uid=uid)
+            uid = self.uids[idx]
+            payload['uid'] = uid
 
-        return dict(zs=zs, context=context)
+        return payload
 
 
 class WireframeDataset(Dataset):

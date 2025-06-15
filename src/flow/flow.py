@@ -7,7 +7,10 @@ from timm.models.vision_transformer import Mlp, Attention
 
 from src.vae.vae_wireframe import AutoencoderKLWireframeFastEncode
 
-from src.pointnet2.pointnet2.models.pointnet2_msg_cls import PointNet2ClassificationMSG_WOPL
+try:
+    from src.pointnet2.pointnet2.models.pointnet2_msg_cls import PointNet2ClassificationMSG_WOPL
+except:
+    print("PointNet2ClassificationMSG_WOPL not found")
 
 
 def set_module_requires_grad_(
