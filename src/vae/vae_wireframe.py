@@ -724,18 +724,19 @@ class AutoencoderKLWireframeFastEncode(ModelMixin, ConfigMixin):
 
         posterior = ae_kl_output.latent_dist
 
-        if sample_posterior:
-            z = posterior.sample(generator=generator)
-        else:
-            z = posterior.mode()
-
+        # if sample_posterior:
+        #     z = posterior.sample(generator=generator)
+        # else:
+        #     z = posterior.mode()
+        
+        mu = posterior.mode()
         
         if return_std:
             std = posterior.std
-            zs = torch.cat([z, std], dim=1)
+            zs = torch.cat([mu, std], dim=1)
             return zs
         
-        return z
+        return mu
 
 
 class AutoencoderKLWireframeFastDecode(ModelMixin, ConfigMixin):
@@ -752,8 +753,8 @@ class AutoencoderKLWireframeFastDecode(ModelMixin, ConfigMixin):
         attn_dim: int = 512,
         num_heads: int = 8,
         max_curves_num: int = 128,
-        wireframe_latent_num: int = 64,
         use_mlp_predict: bool = False,
+        use_latent_pos_emb: bool = False,
         **kwargs,
     ):
         super().__init__()
@@ -773,6 +774,7 @@ class AutoencoderKLWireframeFastDecode(ModelMixin, ConfigMixin):
             in_channels=latent_channels, 
             attn_kwargs=attn_kwargs,
             max_curves_num=max_curves_num,
+            use_latent_pos_emb=use_latent_pos_emb,
         )
 
         self.use_mlp_predict = use_mlp_predict
