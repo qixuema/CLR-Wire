@@ -644,8 +644,7 @@ class AutoencoderKLWireframeFastEncode(ModelMixin, ConfigMixin):
         num_heads: int = 8,
         max_curves_num: int = 128,
         wireframe_latent_num: int = 64,
-        curve_latent_embed_dim: int = 256,
-        use_mlp_predict: bool = False,
+        curve_latent_embed_dim: int = 128,
         **kwargs,
     ):
         super().__init__()
