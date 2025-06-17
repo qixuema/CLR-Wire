@@ -6,6 +6,7 @@ import enum
 from . import path
 from .utils import mean_flat
 from .integrators import ode, sde
+from scipy.optimize import linear_sum_assignment
 
 class ModelType(enum.Enum):
     """
@@ -98,6 +99,42 @@ class Transport:
 
         return t0, t1
 
+    def find_nearest_noise(
+        self,
+        x: th.Tensor, 
+        noise: th.Tensor
+    ) -> th.Tensor:
+        """
+        Match x[i] and noise[j] in a one-to-one manner, and return the noise_match tensor in the order of x.
+
+        Args:
+        x:     Tensor, shape [B, d1, d2, …]
+        noise: Tensor, shape [B, d1, d2, …]
+
+        Returns:
+        noise_matched: Tensor of shape [N, d1, d2, …],
+                        where noise_matched[i] is the nearest noise to x[i] in a one-to-one manner.
+        """
+        # Flatten to [N, D] and [M, D]
+        B = x.shape[0]
+        x_flat = x.view(B, -1)
+        noise_flat = noise.view(B, -1)
+        
+        # Calculate ||x||^2 and ||noise||^2
+        x_norm2     = (x_flat * x_flat).sum(dim=1, keepdim=True)    # [B,1]
+        noise_norm2 = (noise_flat * noise_flat).sum(dim=1, keepdim=True)  # [B,1]
+        
+        # Calculate the square distance matrix: x_norm2 + noise_norm2^T - 2·x·noise^T  -> [B, M]
+        # Here noise_norm2.T will be broadcasted to [1, M]
+        d2 = x_norm2 + noise_norm2.T - 2.0 * (x_flat @ noise_flat.T)        
+        
+        cost_matrix = d2.cpu().numpy()
+        row_ind, col_ind = linear_sum_assignment(cost_matrix)
+        idxs = th.from_numpy(col_ind).to(x).to(th.long)
+        
+        return noise[idxs]
+
+
 
     def sample(self, x1):
         """Sampling x0 & t based on shape of x1 (if needed)
@@ -109,6 +146,7 @@ class Transport:
         t0, t1 = self.check_interval(self.train_eps, self.sample_eps)
         t = th.rand((x1.shape[0],)) * (t1 - t0) + t0
         t = t.to(x1)
+        x0 = self.find_nearest_noise(x0, x1)
         return t, x0, x1
     
 

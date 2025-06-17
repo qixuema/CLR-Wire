@@ -1,111 +1,28 @@
-from typing import Dict, Optional, Tuple, Union
-import numpy as np
-
 import torch
-import torch.nn.functional as F
 import torch.nn as nn
 from torch.nn import Module
-from torch.nn import TransformerEncoder, TransformerEncoderLayer, TransformerDecoder, TransformerDecoderLayer
+from typing import Optional
+from torchtyping import TensorType
+from typing import Union
+from einops import rearrange, repeat, pack
 
-from x_transformers.x_transformers import AttentionLayers
 from beartype import beartype
-from beartype.typing import Tuple, Optional
-
 from diffusers.configuration_utils import ConfigMixin, register_to_config
 from diffusers.utils.accelerate_utils import apply_forward_hook
 from diffusers.models.modeling_utils import ModelMixin
 from diffusers.models.autoencoders.vae import DecoderOutput, DiagonalGaussianDistribution
 
-from torchtyping import TensorType
-from einops import rearrange, repeat, pack
-
-from src.vae.modules import AutoencoderKLOutput, MLP
-from src.utils.helpers import (
-    exists, 
-    is_odd, 
-    default, 
-)
-
-
-def normalize(x, dim=None, eps=1e-4):
-    if dim is None:
-        dim = list(range(1, x.ndim))
-    norm = torch.linalg.vector_norm(x, dim=dim, keepdim=True, dtype=torch.float32)
-    norm = torch.add(eps, norm, alpha=np.sqrt(norm.numel() / x.numel()))
-    return x / norm.to(x.dtype)
-
-class MPConv(torch.nn.Module):
-    def __init__(self, in_channels, out_channels, kernel):
-        super().__init__()
-        self.out_channels = out_channels
-        self.weight = torch.nn.Parameter(torch.randn(out_channels, in_channels, *kernel))
-
-    def forward(self, x, gain=1):
-        w = self.weight.to(torch.float32)
-        if self.training:
-            with torch.no_grad():
-                self.weight.copy_(normalize(w)) # forced weight normalization
-        w = normalize(w) # traditional weight normalization
-        w = w * (gain / np.sqrt(w[0].numel())) # magnitude-preserving scaling
-        w = w.to(x.dtype)
-        if w.ndim == 2:
-            return x @ w.t()
-        assert w.ndim == 4
-        return torch.nn.functional.conv2d(x, w, padding=(w.shape[-1]//2,))
-
-
-class PointEmbed(nn.Module):
-    def __init__(self, hidden_dim=48, dim=128, other_dim=0):
-        super().__init__()
-
-        assert hidden_dim % 6 == 0
-
-        self.embedding_dim = hidden_dim
-        e = torch.pow(2, torch.arange(self.embedding_dim // 6)).float() * np.pi
-        e = torch.stack([
-            torch.cat([e, torch.zeros(self.embedding_dim // 6),
-                        torch.zeros(self.embedding_dim // 6)]),
-            torch.cat([torch.zeros(self.embedding_dim // 6), e,
-                        torch.zeros(self.embedding_dim // 6)]),
-            torch.cat([torch.zeros(self.embedding_dim // 6),
-                        torch.zeros(self.embedding_dim // 6), e]),
-        ])
-        self.register_buffer('basis', e)  # 3 x 16
-
-        # self.mlp = nn.Linear(self.embedding_dim+3, dim)/
-        self.mlp = MPConv(self.embedding_dim+3+other_dim, dim, kernel=[])
-
-    @staticmethod
-    def embed(input, basis):
-        # print(input.shape, basis.shape)
-        projections = torch.einsum('nd,de->ne', input, basis)
-        embeddings = torch.cat([projections.sin(), projections.cos()], dim=1)
-        return embeddings
-    
-    def forward(self, input):
-        # input: N x 3
-        if input.shape[1] != 3:
-            input, others = input[:, :3], input[:, 3:]
-        else:
-            others = None
-        
-        if others is None:
-            embed = self.mlp(torch.cat([self.embed(input, self.basis), input], dim=1)) # N x C
-        else:
-            embed = self.mlp(torch.cat([self.embed(input, self.basis), input, others], dim=1))
-        return embed
+from src.vae.modules import AutoencoderKLOutput, MLP, AttentionLayerFactory, PointEmbed, FocalLoss, ce_loss
 
 class EmbeddingLayerFactory:
     def __init__(
         self, 
-        num_discrete_coors: int, 
         point_embed_dim: int, 
         max_col_diff: int, 
         col_diff_embed_dim: int,
         max_row_diff: int, 
         row_diff_embed_dim: int, 
     ):
-        self.num_discrete_coors = num_discrete_coors
         self.point_embed_dim = point_embed_dim
         self.max_col_diff = max_col_diff
         self.col_diff_embed_dim = col_diff_embed_dim
@@ -113,7 +30,6 @@ class EmbeddingLayerFactory:
         self.row_diff_embed_dim = row_diff_embed_dim
 
     def create_embeddings(self):
-        
         point_embed = PointEmbed(dim=self.point_embed_dim)
         
         col_diff_embed = nn.Embedding(self.max_col_diff, self.col_diff_embed_dim)
@@ -121,51 +37,18 @@ class EmbeddingLayerFactory:
         return point_embed, col_diff_embed, row_diff_embed
 
 
-# attention_layer_factory.py
-class AttentionLayerFactory:
-    @staticmethod
-    def create_transformer_encoder_layer(dim: int, heads: int, depth: int, dropout: float = 0.0):
-        encoder_layer = TransformerEncoderLayer(d_model=dim, nhead=heads, batch_first=True, dropout=dropout)
-        return TransformerEncoder(encoder_layer=encoder_layer, num_layers=depth)
-
-    @staticmethod
-    def create_transformer_decoder_layer(dim: int, heads: int, depth: int, dropout: float = 0.0):
-        decoder_layer = TransformerDecoderLayer(d_model=dim, nhead=heads, batch_first=True, dropout= dropout)
-        return TransformerDecoder(decoder_layer=decoder_layer, num_layers=depth)
-
-    @staticmethod
-    def create_x_transformer_cross_attn_layer(dim: int, heads: int, depth: int):
-        return AttentionLayers(
-            dim=dim, heads=heads, depth=depth, 
-            cross_attend=True, only_cross=True,
-            use_rmsnorm=True, 
-            attn_flash=True,
-        )
-        
-    @staticmethod
-    def create_x_transformer_self_attn_layer(dim: int, heads: int, depth: int):
-        return AttentionLayers(
-            dim=dim, heads=heads, depth=depth, 
-            use_rmsnorm=True, 
-            attn_flash=True,
-        )
-
-
 class Encoder1D(Module):
     def __init__(
         self,
         out_channels = 8,
-        num_discrete_coors = 128,
-        coor_continuous_range: Tuple[float, float] = (-1., 1.),
         coor_embed_dim = 128,
         max_col_diff=6,
         max_row_diff=32,
         col_diff_embed_dim = 16,
         row_diff_embed_dim = 32,
-        max_vertices_num = 192,
         max_curves_num = 128,
         curve_latent_channels = 12,
-        curve_latent_embed_dim = 256,
+        curve_latent_embed_dim = 128,
         attn_kwargs: dict = dict(
             dim = 512,
             depth = 4,
@@ -178,9 +61,8 @@ class Encoder1D(Module):
       
         self.max_curves_num = max_curves_num
         self.wireframe_latent_num = wireframe_latent_num
-
+        
         embedding_factory = EmbeddingLayerFactory(
-            num_discrete_coors = num_discrete_coors,
             point_embed_dim = coor_embed_dim * 3,
             max_col_diff = max_col_diff,
             col_diff_embed_dim = col_diff_embed_dim,
@@ -193,7 +75,7 @@ class Encoder1D(Module):
             self.col_diff_embed, 
             self.row_diff_embed
         ) = embedding_factory.create_embeddings()
-
+        
         attn_dim = attn_kwargs['dim']
         
         # latent mu embedding
@@ -206,6 +88,8 @@ class Encoder1D(Module):
         
         self.pos_emb = nn.Parameter(torch.randn(max_curves_num, attn_dim))
 
+        # init feature embedding dim
+        
         init_dim = (coor_embed_dim * 6 + col_diff_embed_dim + row_diff_embed_dim + curve_latent_embed_dim)
 
         self.attn_project_in = nn.Linear(init_dim, attn_dim)
@@ -220,7 +104,6 @@ class Encoder1D(Module):
         # register buffer
         self.register_buffer('max_col_diff', torch.tensor(max_col_diff))
         self.register_buffer('max_row_diff', torch.tensor(max_row_diff))
-        self.register_buffer('max_vertices_num', torch.tensor(max_vertices_num))
 
     def forward(
         self,
@@ -239,13 +122,13 @@ class Encoder1D(Module):
         line_coor_embed = self.point_embed(points) #  (bs, nl, 6, dim_coor_embed)
         line_coor_embed = rearrange(line_coor_embed, '(b nl nlv) d -> b nl nlv d', b=bs, nlv=2)
         line_coor_embed = rearrange(line_coor_embed, 'b nl nlv d -> b nl (nlv d)')
-                
+
         flag = flag_diffs[..., 0].unsqueeze(-1) # bs, nl, 1
         diffs = flag_diffs[..., 1:] # bs, nl, 2
         
         col_diff = diffs[..., 0]
         row_diff = diffs[..., 1]
-    
+
         col_diff_embed = self.col_diff_embed(col_diff)
         row_diff_embed = self.row_diff_embed(row_diff)
 
@@ -269,7 +152,7 @@ class Encoder1D(Module):
         context_padding_mask = rearrange(flag < 0.5, 'b n c -> b (n c)')
 
         wireframe_latent_embed = self.cross_attn(x=enc_learnable_query, context=wire_embed, context_mask=~context_padding_mask)
-        
+
         # project out
 
         wireframe_latent = self.project_out(wireframe_latent_embed)
@@ -290,17 +173,23 @@ class Decoder1D(Module):
             self_depth = 6,
             cross_depth = 2,
         ),
-        max_curves_num = 256,
+        max_curves_num = 128,
+        wireframe_latent_num = 64,
+        use_latent_pos_emb: bool = False,
     ):
         super().__init__()
         
         self.max_curves_num = max_curves_num
+        self.use_latent_pos_emb = use_latent_pos_emb
 
         attn_dim = attn_kwargs['dim']
 
         self.proj_in = nn.Linear(in_channels, attn_dim)
 
-        self.dec_learnable_query = nn.Parameter(torch.randn(max_curves_num, attn_dim))            
+        if self.use_latent_pos_emb:
+            self.pos_emb = nn.Parameter(torch.randn(wireframe_latent_num, attn_dim))
+
+        self.dec_learnable_query = nn.Parameter(torch.randn(1 + max_curves_num, attn_dim))
         
         attn_factory = AttentionLayerFactory()
         
@@ -315,7 +204,7 @@ class Decoder1D(Module):
             heads=attn_kwargs['heads'], 
             depth=attn_kwargs['cross_depth']
         )
-        
+
         self.proj_out = nn.Linear(attn_dim, attn_dim)
 
     @beartype
@@ -326,9 +215,11 @@ class Decoder1D(Module):
         bs = zs.shape[0]
         wireframe_latent = self.proj_in(zs)
 
+        if self.use_latent_pos_emb:
+            wireframe_latent = self.pos_emb + wireframe_latent
+
         # self attn
         
-        # x = rearrange(x, 'b n d -> n b d')
         wireframe_latent = self.self_attn(wireframe_latent)
         
         # cross attn
@@ -359,15 +250,17 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
         max_curves_num: int = 128,
         wireframe_latent_num: int = 64,
         label_smoothing: float = 0.005,
-        flag_bce_loss_weight: float = 1.,
-        segment_ce_loss_weight: float = 1.,
-        col_diff_ce_loss_weight: float = 1.,
-        row_diff_ce_loss_weight: float = 1.,
+        cls_loss_weight: float = 1.,
+        segment_loss_weight: float = 1.,
+        col_diff_loss_weight: float = 1.,
+        row_diff_loss_weight: float = 1.,
         curve_latent_loss_weight: float = 1.,
         kl_loss_weight: float = 2e-4,
         curve_latent_embed_dim: int = 256,
         use_mlp_predict: bool = False,
-        **kwargs,
+        use_focal_loss: bool = False,
+        use_latent_pos_emb: bool = False,
+        # **kwargs,
     ):
         super().__init__()
         
@@ -400,21 +293,23 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
             in_channels=latent_channels, 
             attn_kwargs=attn_kwargs,
             max_curves_num=max_curves_num,
+            use_latent_pos_emb=use_latent_pos_emb,
         )
         
         
         self.use_mlp_predict = use_mlp_predict
         if use_mlp_predict:
             dim = attn_dim
-
-            self.predict_flag = MLP(in_dim=dim, out_dim=1)
-            self.predict_diffs = MLP(in_dim=dim, out_dim=6+32)
-            self.predict_segments = MLP(in_dim=dim, out_dim=768)
-            self.predict_curve_latent = MLP(in_dim=dim, out_dim=12)        
-                        
+            
+            expansion_factor = 1.0
+            self.predict_cls = MLP(in_dim=dim, out_dim=max_curves_num, expansion_factor=expansion_factor, dropout=0.1)
+            self.predict_diffs = MLP(in_dim=dim, out_dim=max_col_diff+max_row_diff, expansion_factor=expansion_factor, dropout=0.1)
+            self.predict_segments = MLP(in_dim=dim, out_dim=6, expansion_factor=expansion_factor)
+            self.predict_curve_latent = MLP(in_dim=dim, out_dim=12, expansion_factor=expansion_factor) 
         else:
-            out_dim = 1 + 6 + 6 + 32 + 12 # num_flags + num_segments + num_col_diffs + num_row_diffs + num_curve_latent
-            self.linear_predict_logits = nn.Linear(attn_dim, out_dim)
+            out_dim = 6 + 6 + 32 + 12 # num_segments + num_col_diffs + num_row_diffs + num_curve_latent
+            self.predict_cls = nn.Linear(attn_dim, max_curves_num)
+            self.predict_features = nn.Linear(attn_dim, out_dim)
         
 
         self.quant_proj = nn.Linear(2 * latent_channels, 2 * latent_channels)
@@ -422,12 +317,16 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
 
         # for loss function
         self.mse_loss_fn = torch.nn.MSELoss(reduction='none')
-        self.ce_loss_fn = torch.nn.CrossEntropyLoss(reduction='none')
-
-        self.flag_bce_loss_weight = flag_bce_loss_weight
-        self.segment_mse_loss_weight = segment_ce_loss_weight
-        self.col_diff_ce_loss_weight = col_diff_ce_loss_weight
-        self.row_diff_ce_loss_weight = row_diff_ce_loss_weight
+        self.focal_loss = FocalLoss(gamma=2)
+        if use_focal_loss:
+            self.ce_loss = self.focal_loss
+        else:
+            self.ce_loss = ce_loss
+        
+        self.cls_loss_weight = cls_loss_weight
+        self.segment_loss_weight = segment_loss_weight
+        self.col_diff_loss_weight = col_diff_loss_weight
+        self.row_diff_loss_weight = row_diff_loss_weight
         self.curve_latent_loss_weight = curve_latent_loss_weight
         self.kl_loss_weight = kl_loss_weight
 
@@ -441,20 +340,13 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
         row_diff_labels = torch.linspace(-1, 1, self.max_row_diff)
         row_diff_class_weights = torch.exp(row_diff_labels)
 
-        # 设置权重        
         t = torch.linspace(0, 2, self.max_curves_num)
         col_weights = 1.2 - 0.2 * torch.log(t + 1.7183)
 
-        start_segment = 128*6 + 1
-        start_col = start_segment + self.max_col_diff
-        start_curve_latent = start_col + 12
 
         self.register_buffer('col_diff_class_weights', col_diff_class_weights)
         self.register_buffer('row_diff_class_weights', row_diff_class_weights)
         self.register_buffer('col_weights', col_weights)
-        self.register_buffer('start_segment', torch.tensor(start_segment))
-        self.register_buffer('start_col', torch.tensor(start_col))
-        self.register_buffer('start_curve_latent', torch.tensor(start_curve_latent))
 
     @apply_forward_hook
     def encode(
@@ -479,7 +371,7 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
         # assert not torch.isnan(moments).any(), "moments is NaN"
 
         posterior = DiagonalGaussianDistribution(moments)
-        
+
         if not return_dict:
             return (posterior,)
 
@@ -524,69 +416,72 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
 
 
     def linear_predict(self, dec):
-        num_flags = 1
-        num_segments = num_flags + 6
-        num_diffs = num_segments + 6 + 32
+        num_segments = 6
+        num_diffs = num_segments + self.max_col_diff + self.max_row_diff
+        
+        pred_cls_logits = self.predict_cls(dec[:, 0])
+        pred_features_logits = self.predict_features(dec[:, 1:])
 
-        pred_logits = self.linear_predict_logits(dec)
-
-        pred_flag_logits = pred_logits[..., :num_flags]
-        pred_segments = pred_logits[..., num_flags:num_segments]
-        assert pred_segments.shape[-1] == 6
-        pred_diffs_logits = pred_logits[..., num_segments:num_diffs]
-        assert pred_diffs_logits.shape[-1] == 38
-        pred_curve_latent = pred_logits[..., num_diffs:]
+        pred_segments = pred_features_logits[..., :num_segments]
+        assert pred_segments.shape[-1] == num_segments
+        pred_diffs_logits = pred_features_logits[..., num_segments:num_diffs]
+        assert pred_diffs_logits.shape[-1] == self.max_col_diff + self.max_row_diff
+        pred_curve_latent = pred_features_logits[..., num_diffs:]
         assert pred_curve_latent.shape[-1] == 12
         
-        return pred_flag_logits, pred_segments, pred_diffs_logits, pred_curve_latent
+        return pred_cls_logits, pred_segments, pred_diffs_logits, pred_curve_latent
 
     def mlp_predict(self, dec):
         # for multi task
-        pred_flag_logits = self.predict_flag(dec)
-        pred_segment_logits = self.predict_segments(dec)
-        pred_diffs_logits = self.predict_diffs(dec)
-        pred_curve_latent = self.predict_curve_latent(dec)
+        cls_token = dec[:, 0]
+        features_tokens = dec[:, 1:]
+        pred_cls_logits = self.predict_cls(cls_token)
+        pred_segments = self.predict_segments(features_tokens)
+        pred_diffs_logits = self.predict_diffs(features_tokens)
+        pred_curve_latent = self.predict_curve_latent(features_tokens)
         
-        return pred_flag_logits, pred_segment_logits, pred_diffs_logits, pred_curve_latent
+        return pred_cls_logits, pred_segments, pred_diffs_logits, pred_curve_latent
 
     def loss(
         self, 
         *,
-        segment_coords,
-        flag_diffs,
+        gt_segment_coords,
+        gt_flag_diffs,
         gt_curve_latent,
         xs_mask,
         preds,
     ):
         (
-            pred_flag_logits, 
+            pred_cls_logits, 
             pred_segments, 
             pred_diffs_logits, 
             pred_curve_latent_mu,
         ) = (
-            preds['flags'],
+            preds['cls'],
             preds['segments'],
             preds['diffs'],
             preds['curve_latent'],
         )
         
-        bs = pred_flag_logits.shape[0]
+        bs = pred_cls_logits.shape[0]
 
-        flag = flag_diffs[..., 0]
-        diffs = flag_diffs[..., 1:]
+        cls = gt_flag_diffs[..., 0].sum(dim=-1) - 1
+        diffs = gt_flag_diffs[..., 1:]
 
-        # ================== flag bce loss =================
-        pred_flag_logits = pred_flag_logits.squeeze(-1)
-        flag_bce_loss = F.binary_cross_entropy_with_logits(
-            pred_flag_logits, 
-            flag.float(), 
-            reduction='mean'
+        # ================== cls ce loss =================
+
+        cls_ce_loss = self.ce_loss(
+            pred_cls_logits, 
+            cls, 
+            reduction='mean',
+            label_smoothing=self.label_smoothing, 
+            num_classes=self.max_curves_num,
         )
-
+        
         # ================== segment ce loss =================
 
 
-        segment_mse_loss = self.mse_loss_fn(pred_segments, segment_coords)
+        segment_mse_loss = self.mse_loss_fn(pred_segments, gt_segment_coords)
 
         line_mask = repeat(xs_mask, 'b nl -> b nl r', r = 6)
         segment_mse_loss = segment_mse_loss[line_mask].mean()
@@ -596,22 +491,25 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
         rearranged_logits = rearrange(pred_diffs_logits, 'b ... c -> b c (...)')
         
         pred_col_diff_logits, pred_row_diff_logits = rearranged_logits.split([self.max_col_diff, rearranged_logits.shape[1] - self.max_col_diff], dim=1)
-
-        col_diff_ce_loss = F.cross_entropy(
+        
+        col_diff_ce_loss = self.ce_loss(
             pred_col_diff_logits, 
             diffs[..., 0],
-            reduction='none', 
-            label_smoothing=self.label_smoothing, 
-            weight=self.col_diff_class_weights
+            num_classes=self.max_col_diff,
+            label_smoothing=self.label_smoothing,
+            weight=self.col_diff_class_weights,
+            reduction='none',
         )
         
-        row_diff_ce_loss = F.cross_entropy(
+        row_diff_ce_loss = self.ce_loss(
             pred_row_diff_logits, 
             diffs[..., 1],
-            reduction='none', 
-            label_smoothing=self.label_smoothing, 
-            weight=self.row_diff_class_weights
+            num_classes=self.max_row_diff,
+            label_smoothing=self.label_smoothing,
+            weight=self.row_diff_class_weights,
+            reduction='none',
         )
+        
                     
         col_weights = repeat(self.col_weights, 'n -> b n', b=bs)
                     
@@ -621,11 +519,11 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
         # ================== curve latent mse loss =================
         gt_curve_latent_std = torch.clamp(gt_curve_latent[..., 12:], 0., 1.)
         mu_weights = 1.2 - 0.5 * torch.log(gt_curve_latent_std + 1.7183)
-        
-        curve_latent_mask = repeat(xs_mask, 'b nl -> b nl r', r = 12)
-        curve_latent_loss = (mu_weights * self.mse_loss_fn(pred_curve_latent_mu, gt_curve_latent[..., :12]))[curve_latent_mask].mean()        
 
-        return flag_bce_loss, segment_mse_loss, col_diff_ce_loss, row_diff_ce_loss, curve_latent_loss, None
+        curve_latent_mask = repeat(xs_mask, 'b nl -> b nl r', r = 12)
+        curve_latent_loss = (mu_weights * self.mse_loss_fn(pred_curve_latent_mu, gt_curve_latent[..., :12]))[curve_latent_mask].mean()
+
+        return cls_ce_loss, segment_mse_loss, col_diff_ce_loss, row_diff_ce_loss, curve_latent_loss
 
     def forward(
         self,
@@ -665,18 +563,17 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
             z = posterior.sample(generator=generator)
         else:
             z = posterior.mode()
-
         # decode
         dec = self.decode(z=z).sample
 
         if self.use_mlp_predict:
-            pred_flag_logits, pred_segment_logits, pred_diffs_logits, pred_curve_latent = self.mlp_predict(dec)
+            pred_cls_logits, pred_segments, pred_diffs_logits, pred_curve_latent = self.mlp_predict(dec)
         else:
-            pred_flag_logits, pred_segment_logits, pred_diffs_logits, pred_curve_latent = self.linear_predict(dec)
+            pred_cls_logits, pred_segments, pred_diffs_logits, pred_curve_latent = self.linear_predict(dec)
 
         preds = {
-            'flags': pred_flag_logits,
-            'segments': pred_segment_logits,
+            'cls': pred_cls_logits,
+            'segments': pred_segments,
             'diffs': pred_diffs_logits,
             'curve_latent': pred_curve_latent,
         }
@@ -692,40 +589,43 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
                 kl_loss = 0 * kl_loss
             
             (
-                flag_bce_loss, 
+                cls_ce_loss, 
                 segment_mse_loss, 
                 col_diff_ce_loss, 
                 row_diff_ce_loss,
                 curve_latent_loss,
-                L2_loss,
             ) = self.loss(
-                segment_coords=segment_coords,
-                flag_diffs=flag_diffs,
+                gt_segment_coords=segment_coords,
+                gt_flag_diffs=flag_diffs,
                 gt_curve_latent = xs[..., 6:],
                 xs_mask=xs_mask,
                 preds=preds,
             )
-
-            a, b, c = (0.25, 0.733, 6.955)
             
-            new_kl_loss_weight = self.kl_loss_weight
-            
-            loss = (self.flag_bce_loss_weight*flag_bce_loss
-                + self.segment_mse_loss_weight*segment_mse_loss
-                + self.col_diff_ce_loss_weight*col_diff_ce_loss 
-                + self.row_diff_ce_loss_weight*row_diff_ce_loss 
-                + self.curve_latent_loss_weight*curve_latent_loss
-                + new_kl_loss_weight*kl_loss
-            )
-
-            return loss, dict(
-                flag_bce_loss=flag_bce_loss,
+            all_losses = dict(
+                cls_ce_loss=cls_ce_loss,
                 segment_mse_loss=segment_mse_loss,
                 col_diff_ce_loss=col_diff_ce_loss,
                 row_diff_ce_loss=row_diff_ce_loss,
                 curve_latent_loss=curve_latent_loss,
                 kl_loss=kl_loss,
             )
+            
+            new_kl_loss_weight = self.kl_loss_weight
+            
+            loss = (self.cls_loss_weight*cls_ce_loss
+                + self.segment_loss_weight*segment_mse_loss
+                + self.col_diff_loss_weight*col_diff_ce_loss 
+                + self.row_diff_loss_weight*row_diff_ce_loss 
+                + self.curve_latent_loss_weight*curve_latent_loss
+                + new_kl_loss_weight*kl_loss
+            )
+            
+            
+            all_losses['mu'] = posterior.mean.abs().mean()
+            all_losses['std'] = posterior.std.mean()
+
+            return loss, all_losses
         
         return preds
 
@@ -744,8 +644,7 @@ class AutoencoderKLWireframeFastEncode(ModelMixin, ConfigMixin):
         num_heads: int = 8,
         max_curves_num: int = 128,
         wireframe_latent_num: int = 64,
-        curve_latent_embed_dim: int = 256,
-        use_mlp_predict: bool = False,
+        curve_latent_embed_dim: int = 128,
         **kwargs,
     ):
         super().__init__()
@@ -777,7 +676,6 @@ class AutoencoderKLWireframeFastEncode(ModelMixin, ConfigMixin):
         xs:                 TensorType['b', 'nl', 6, float],
         flag_diffs:              TensorType['b', 'nl', 2, int],
         return_dict:        bool = True,
-        return_segment_coords: bool = True,
     ) -> AutoencoderKLOutput:
 
         h = self.encoder(
@@ -793,11 +691,7 @@ class AutoencoderKLWireframeFastEncode(ModelMixin, ConfigMixin):
 
         if not return_dict:
             return (posterior,)
-
-
-        if not return_segment_coords:
-            return AutoencoderKLOutput(latent_dist=posterior)
-        
+    
         return AutoencoderKLOutput(
             latent_dist=posterior, 
         )
@@ -828,19 +722,20 @@ class AutoencoderKLWireframeFastEncode(ModelMixin, ConfigMixin):
         )
 
         posterior = ae_kl_output.latent_dist
-        
-        # sample_posterior = False
-        if sample_posterior:
-            z = posterior.sample(generator=generator)
-        else:
-            z = posterior.mode()
 
+        # if sample_posterior:
+        #     z = posterior.sample(generator=generator)
+        # else:
+        #     z = posterior.mode()
+        
+        mu = posterior.mode()
         
         if return_std:
             std = posterior.std
-            zs = torch.cat([z, std], dim=1)
+            zs = torch.cat([mu, std], dim=1)
             return zs
-        return z
+        
+        return mu
 
 
 class AutoencoderKLWireframeFastDecode(ModelMixin, ConfigMixin):
@@ -857,8 +752,8 @@ class AutoencoderKLWireframeFastDecode(ModelMixin, ConfigMixin):
         attn_dim: int = 512,
         num_heads: int = 8,
         max_curves_num: int = 128,
-        wireframe_latent_num: int = 64,
         use_mlp_predict: bool = False,
+        use_latent_pos_emb: bool = False,
         **kwargs,
     ):
         super().__init__()
@@ -876,33 +771,27 @@ class AutoencoderKLWireframeFastDecode(ModelMixin, ConfigMixin):
 
         self.decoder = Decoder1D(
             in_channels=latent_channels, 
-            curveset_latent_num=wireframe_latent_num,
             attn_kwargs=attn_kwargs,
             max_curves_num=max_curves_num,
+            use_latent_pos_emb=use_latent_pos_emb,
         )
 
         self.use_mlp_predict = use_mlp_predict
         if use_mlp_predict:
             dim = attn_dim
-
-            self.predict_flag = MLP(in_dim=dim, out_dim=1)
-            self.predict_diffs = MLP(in_dim=dim, out_dim=6+32)
-            self.predict_segments = MLP(in_dim=dim, out_dim=768)
-            self.predict_curve_latent = MLP(in_dim=dim, out_dim=12)        
-                        
+            
+            expansion_factor = 1.0
+            self.predict_cls = MLP(in_dim=dim, out_dim=max_curves_num, expansion_factor=expansion_factor, dropout=0.1)
+            self.predict_diffs = MLP(in_dim=dim, out_dim=max_col_diff+max_row_diff, expansion_factor=expansion_factor, dropout=0.1)
+            self.predict_segments = MLP(in_dim=dim, out_dim=6, expansion_factor=expansion_factor)
+            self.predict_curve_latent = MLP(in_dim=dim, out_dim=12, expansion_factor=expansion_factor) 
         else:
-            out_dim = 1 + 6 + 6 + 32 + 12 # num_flags + num_segments + num_col_diffs + num_row_diffs + num_curve_latent
-            self.linear_predict_logits = nn.Linear(attn_dim, out_dim)
+            out_dim = 6 + 6 + 32 + 12 # num_segments + num_col_diffs + num_row_diffs + num_curve_latent
+            self.predict_cls = nn.Linear(attn_dim, max_curves_num)
+            self.predict_features = nn.Linear(attn_dim, out_dim)
+        
 
         self.post_quant_proj = nn.Linear(latent_channels, latent_channels)
-
-        start_segment = 128*6 + 1
-        start_col = start_segment + self.max_col_diff
-        start_curve_latent = start_col + 12
-
-        self.register_buffer('start_segment', torch.tensor(start_segment))
-        self.register_buffer('start_col', torch.tensor(start_col))
-        self.register_buffer('start_curve_latent', torch.tensor(start_curve_latent))
 
     def _decode(
         self, 
@@ -936,30 +825,31 @@ class AutoencoderKLWireframeFastDecode(ModelMixin, ConfigMixin):
         return DecoderOutput(sample=decoded)
 
     def linear_predict(self, dec):
-        num_flags = 1
-        num_segments = num_flags + 6
-        num_diffs = num_segments + 6 + 32
+        num_segments = 6
+        num_diffs = num_segments + self.max_col_diff + self.max_row_diff
+        
+        pred_cls_logits = self.predict_cls(dec[:, 0])
+        pred_features_logits = self.predict_features(dec[:, 1:])
 
-        pred_logits = self.linear_predict_logits(dec)
-
-        pred_flag_logits = pred_logits[..., :num_flags]
-        pred_segments = pred_logits[..., num_flags:num_segments]
-        assert pred_segments.shape[-1] == 6
-        pred_diffs_logits = pred_logits[..., num_segments:num_diffs]
-        assert pred_diffs_logits.shape[-1] == 38
-        pred_curve_latent = pred_logits[..., num_diffs:]
+        pred_segments = pred_features_logits[..., :num_segments]
+        assert pred_segments.shape[-1] == num_segments
+        pred_diffs_logits = pred_features_logits[..., num_segments:num_diffs]
+        assert pred_diffs_logits.shape[-1] == self.max_col_diff + self.max_row_diff
+        pred_curve_latent = pred_features_logits[..., num_diffs:]
         assert pred_curve_latent.shape[-1] == 12
         
-        return pred_flag_logits, pred_segments, pred_diffs_logits, pred_curve_latent
+        return pred_cls_logits, pred_segments, pred_diffs_logits, pred_curve_latent
 
     def mlp_predict(self, dec):
         # for multi task
-        pred_flag_logits = self.predict_flag(dec)
-        pred_segment_logits = self.predict_segments(dec)
-        pred_diffs_logits = self.predict_diffs(dec)
-        pred_curve_latent = self.predict_curve_latent(dec)
+        cls_token = dec[:, 0]
+        features_tokens = dec[:, 1:]
+        pred_cls_logits = self.predict_cls(cls_token)
+        pred_segments = self.predict_segments(features_tokens)
+        pred_diffs_logits = self.predict_diffs(features_tokens)
+        pred_curve_latent = self.predict_curve_latent(features_tokens)
         
-        return pred_flag_logits, pred_segment_logits, pred_diffs_logits, pred_curve_latent
+        return pred_cls_logits, pred_segments, pred_diffs_logits, pred_curve_latent
 
 
     def forward(
@@ -977,23 +867,24 @@ class AutoencoderKLWireframeFastDecode(ModelMixin, ConfigMixin):
             return_dict (`bool`, *optional*, defaults to `True`):
                 Whether or not to return a [`DecoderOutput`] instead of a plain tuple.
         """
+
         zs = rearrange(zs, 'b nwl d -> b d nwl')
 
         # decode
         dec = self.decode(zs=zs).sample
 
         if self.use_mlp_predict:
-            pred_flag_logits, pred_segment_logits, pred_diffs_logits, pred_curve_latent = self.mlp_predict(dec)
+            pred_cls_logits, pred_segments, pred_diffs_logits, pred_curve_latent = self.mlp_predict(dec)
         else:
-            pred_flag_logits, pred_segment_logits, pred_diffs_logits, pred_curve_latent = self.linear_predict(dec)
+            pred_cls_logits, pred_segments, pred_diffs_logits, pred_curve_latent = self.linear_predict(dec)
 
         preds = {
-            'flags': pred_flag_logits,
-            'segments': pred_segment_logits,
+            'cls': pred_cls_logits,
+            'segments': pred_segments,
             'diffs': pred_diffs_logits,
             'curve_latent': pred_curve_latent,
         }
-        
+
         if not return_dict:
             return (dec,)
 
