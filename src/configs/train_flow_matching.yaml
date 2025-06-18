@@ -40,6 +40,7 @@ MODEL:
     condition_on_img: false
 
     checkpoint_folder: checkpoints/checkpoints_flow_matching
+    checkpoint_file_name: model-100.pt
 
 SAMPLING:
     mode: SDE
