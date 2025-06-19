@@ -145,7 +145,7 @@ class BaseTrainer(Module):
             self.val_dl_iter = cycle(self.val_dl)
 
 
-        self.num_step_per_epoch = num_step_per_epoch // dataset.replica
+        self.num_step_per_epoch = max(num_step_per_epoch // dataset.replica, 1)
 
         # optimizer
 
@@ -391,7 +391,7 @@ class BaseTrainer(Module):
 
                 self.print(get_current_time() + f' checkpoint saved at {self.checkpoint_folder / f"model-{milestone}.pt"}')
 
-            if self.is_main and divisible_by(step, self.num_step_per_epoch):
+            if self.is_main and divisible_by(step, self.num_step_per_epoch, 100):
                 print(get_current_time() + f' {step // self.num_step_per_epoch} epoch at ', step)                    
 
             self.wait()
