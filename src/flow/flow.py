@@ -198,16 +198,13 @@ class DiT(nn.Module):
             self.use_dinov2 = use_dinov2
             if use_dinov2:
                 img_latent_channels = 1024
-                self.process_img_latent = nn.Sequential(
-                    Mlp(
-                        in_features=img_latent_channels, 
-                        hidden_features=1024,
-                        out_features=self.cond_feature_dim,
-                        act_layer=nn.Sigmoid, 
-                        norm_layer=nn.LayerNorm,
-                        drop=0.5
-                    ),
-                    nn.Sigmoid()
+                self.process_img_latent = Mlp(
+                    in_features=img_latent_channels, 
+                    hidden_features=1024,
+                    out_features=self.cond_feature_dim,
+                    act_layer=nn.SiLU, 
+                    norm_layer=nn.LayerNorm,
+                    drop=0.1
                 )
             else:
                 raise ValueError("Invalid condition_on_img mode")
