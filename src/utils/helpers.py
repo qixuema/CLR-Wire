@@ -26,8 +26,8 @@ def cycle(dl):
         for data in dl:
             yield data
 
-def divisible_by(num, den, k=0):
-    return (num % den == 0) and (num // den == k)
+def divisible_by(num, den):
+    return num % den == 0
 
 def is_odd(n):
     return not divisible_by(n, 2)
