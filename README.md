@@ -56,6 +56,10 @@ To train the model, please use the following commands:
       # Train Flow Matching
       accelerate launch --config_file src/configs/default_config.yaml train_flow_matching.py --config src/configs/train_flow_matching.yaml
 
+To sample the wireframe, download the checkpoint from [google drive](https://drive.google.com/file/d/1ELkagmDFpbRbZgr1Ft0C_RV3iyTSeF7i/view?usp=sharing), extract it to the project root, then run:
+
+      python sample.py
+
 ## :notebook_with_decorative_cover: Citation
 
 If you find our work useful for your research, please consider citing the following papers :)
