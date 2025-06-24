@@ -11,6 +11,7 @@ from src.utils.numpy_tools import (
 )
 
 from src.utils.helpers import first
+
 def random_viewpoint():
     theta = np.random.uniform(np.radians(20), np.radians(110))
     phi = np.random.uniform(0, 2 * np.pi)
@@ -230,3 +231,8 @@ def gaussian_smooth_curve(points, sigma=1.0):
     points_smoothed[...,0,:] = points[...,0,:]
     points_smoothed[..., -1,:] = points[..., -1,:]
     return points_smoothed
+
+def compute_diffs(lines):
+    col_diff = np.diff(lines[:,0], prepend=lines[0,0])
+    row_diff = np.clip(lines[:, 1] - lines[:, 0] - 1, 0, None)
+    return np.stack([col_diff, row_diff], axis=1)

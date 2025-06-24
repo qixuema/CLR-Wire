@@ -81,7 +81,7 @@ class Trainer(BaseTrainer):
 
     def train_step(self, forward_kwargs, is_train=True):
 
-        model_kwargs = dict(context=forward_kwargs['context'])
+        model_kwargs = dict(context=forward_kwargs['context'] if 'context' in forward_kwargs else None)
         x1 = forward_kwargs['zs']
     
         if is_train:

@@ -3,7 +3,7 @@ from_start: false
 
 epochs: 100
 batch_size: 256
-lr: 0.0001
+lr: 0.0003
 label_smoothing: 0.005
 
 num_workers: 64
@@ -11,19 +11,19 @@ grad_accum_every: 2
 max_grad_norm: 1.
 num_gpus: 8
 
-val_every_epoch: 1
+val_every_epoch: 0.2
 save_every_epoch: 1
 log_every_step: 10
 
-use_wandb_tracking: false
+use_wandb_tracking: true
 wandb_project_name: wireframe_vae
 wandb_run_name: test
 
 DATA:
-    train_set_file_path: /studio/datasets/abc/dataset/wireframe_dataset/train
-    val_set_file_path: /studio/datasets/abc/dataset/wireframe_dataset/val
+    train_set_file_path: /studio/datasets/abc/dataset/curve_latent_wireframe/train_file_path_list.json
+    val_set_file_path: /studio/datasets/abc/dataset/curve_latent_wireframe/val_file_path_list.json
     recon_dir_path: /studio/datasets/abc/recon/wireframe/
-    replication: 1
+    replication: 4
 
 MODEL:
     max_col_diff: 6
@@ -42,14 +42,15 @@ MODEL:
     attn_dim: 768
     num_heads: 12
     
-    use_mlp_predict: false
+    use_mlp_predict: true
+    use_latent_pos_emb: true
 
-    flag_bce_loss_weight: 1.
-    segment_ce_loss_weight: 50.
-    col_diff_ce_loss_weight: 1.
-    row_diff_ce_loss_weight: 1.
+    cls_loss_weight: 1.
+    segment_loss_weight: 50.
+    col_diff_loss_weight: 1.
+    row_diff_loss_weight: 1.
     curve_latent_loss_weight: 50.
-    kl_loss_weight: 0.000035
+    kl_loss_weight: 0.00005
     
     checkpoint_folder: checkpoints/checkpoints_wireframe_vae
-    checkpoint_file_name: model-100.pt
+    checkpoint_file_name: model.pt

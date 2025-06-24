@@ -2,7 +2,7 @@ resume_training: false
 from_start: false
 
 epochs: 100
-batch_size: 256
+batch_size: 384
 lr: 0.0001
 
 num_workers: 64
@@ -22,6 +22,7 @@ wandb_run_name: test
 DATA:
     train_set_file_path: /studio/datasets/abc/dataset/wireframe_latent/train
     val_set_file_path: /studio/datasets/abc/dataset/wireframe_latent/val
+    gen_path: /studio/datasets/abc/gen/wireframes
     replication: 1
 
     use_partial_pc: false
@@ -40,7 +41,11 @@ MODEL:
     condition_on_img: false
 
     checkpoint_folder: checkpoints/checkpoints_flow_matching
-    checkpoint_file_name: model-100.pt
+    checkpoint_file_name: model.pt
 
 SAMPLING:
+    mode: SDE
+
+    # num
     batch_size: 16
+    iter_num: 2

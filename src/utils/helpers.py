@@ -27,7 +27,7 @@ def cycle(dl):
             yield data
 
 def divisible_by(num, den):
-    return (num % den) == 0
+    return num % den == 0
 
 def is_odd(n):
     return not divisible_by(n, 2)
