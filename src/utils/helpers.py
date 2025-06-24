@@ -1,5 +1,7 @@
 import os
 import sys
+import string
+import random
 from pathlib import Path
 import datetime
 import logging
@@ -127,3 +129,9 @@ def get_or_create_file_list_json(dataset_dir_path, json_path, extension='.npz'):
     file_list.sort()
     
     return file_list
+
+def generate_random_string(length, batch_size=1):
+    chars = string.ascii_letters + string.digits
+    pool = random.choices(chars, k=length * batch_size)
+
+    return [''.join(pool[i*length:(i+1)*length]) for i in range(batch_size)]
