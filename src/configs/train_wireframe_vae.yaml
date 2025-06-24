@@ -53,4 +53,4 @@ MODEL:
     kl_loss_weight: 0.00005
     
     checkpoint_folder: checkpoints/checkpoints_wireframe_vae
-    checkpoint_file_name: model-100.pt
+    checkpoint_file_name: model.pt

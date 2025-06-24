@@ -51,4 +51,4 @@ MODEL:
     kl_weight: 0.000005
 
     checkpoint_folder: checkpoints/checkpoints_curve_vae
-    checkpoint_file_name: model-40.pt
+    checkpoint_file_name: model.pt
