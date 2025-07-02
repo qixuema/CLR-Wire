@@ -2,7 +2,7 @@ resume_training: false
 from_start: false
 
 epochs: 100
-batch_size: 256
+batch_size: 32
 lr: 0.0003
 label_smoothing: 0.005
 
@@ -20,10 +20,14 @@ wandb_project_name: wireframe_vae
 wandb_run_name: test
 
 DATA:
-    train_set_file_path: /studio/datasets/abc/dataset/curve_latent_wireframe/train_file_path_list.json
-    val_set_file_path: /studio/datasets/abc/dataset/curve_latent_wireframe/val_file_path_list.json
+    # train_set_file_path: /studio/datasets/abc/dataset/curve_latent_wireframe/train_file_path_list.json
+    # val_set_file_path: /studio/datasets/abc/dataset/curve_latent_wireframe/val_file_path_list.json
+    train_set_file_path: /studio/datasets/abc/dataset/wireframe_dataset/file_path_list/train_file_path_list.json
+    val_set_file_path: /studio/datasets/abc/dataset/wireframe_dataset/file_path_list/val_file_path_list.json
     recon_dir_path: /studio/datasets/abc/recon/wireframe/
     replication: 4
+    # dataset_type: latent
+    dataset_type: curve
 
 MODEL:
     max_col_diff: 6

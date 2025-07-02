@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 from einops import repeat, rearrange
 from torchtyping import TensorType
+from torch.nn import Module
 
 def fmt(v):
     if torch.is_tensor(v) and v.dim() == 0:
@@ -114,3 +115,10 @@ def point_seq_tangent(
     tangent = F.normalize(tangent, dim=channel_dim, eps=eps)
 
     return tangent
+
+def set_module_requires_grad_(
+    module: Module,
+    requires_grad: bool
+):
+    for param in module.parameters():
+        param.requires_grad = requires_grad

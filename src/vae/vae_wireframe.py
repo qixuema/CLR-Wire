@@ -13,6 +13,32 @@ from diffusers.models.modeling_utils import ModelMixin
 from diffusers.models.autoencoders.vae import DecoderOutput, DiagonalGaussianDistribution
 
 from src.vae.modules import AutoencoderKLOutput, MLP, AttentionLayerFactory, PointEmbed, FocalLoss, ce_loss
+from src.vae.vae_curve import AutoencoderKL1DFastEncode
+from src.utils.torch_tools import set_module_requires_grad_
+
+def build_and_load_curve_vae_encoder(args):
+    model = AutoencoderKL1DFastEncode(
+        in_channels=args.model.in_channels,
+        out_channels=args.model.out_channels,
+        down_block_types=args.model.down_block_types,
+        up_block_types=args.model.up_block_types,
+        block_out_channels=args.model.block_out_channels,
+        layers_per_block=args.model.layers_per_block,
+        act_fn=args.model.act_fn,
+        latent_channels=args.model.latent_channels,
+        norm_num_groups=args.model.norm_num_groups,
+        sample_points_num=args.model.sample_points_num,
+    )
+    
+    checkpoint_path = f"{args.model.checkpoint_folder}/{args.model.checkpoint_file_name}"
+    ckpt = torch.load(checkpoint_path)
+    model.load_state_dict(ckpt, strict=False)
+    model.eval()
+    
+    set_module_requires_grad_(model, False)
+
+    return model
+    
 
 class EmbeddingLayerFactory:
     def __init__(
@@ -260,6 +286,8 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
         use_mlp_predict: bool = False,
         use_focal_loss: bool = False,
         use_latent_pos_emb: bool = False,
+        input_is_curve_latent: bool = True,
+        curve_vae_args: dict = dict(),
         # **kwargs,
     ):
         super().__init__()
@@ -267,12 +295,16 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
         self.max_col_diff = max_col_diff
         self.max_row_diff = max_row_diff
         self.max_curves_num = max_curves_num
+        self.input_is_curve_latent = input_is_curve_latent
 
         attn_kwargs = dict(
             dim = attn_dim,
             heads = num_heads,
             depth = attn_encoder_depth,
         )
+
+        if not self.input_is_curve_latent :
+            self.curve_vae_encoder = build_and_load_curve_vae_encoder(curve_vae_args)
 
         self.encoder = Encoder1D(
             out_channels=latent_channels,
@@ -527,7 +559,7 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
 
     def forward(
         self,
-        xs: TensorType['b', 'nl', 6+12+12, float],
+        xs: TensorType['b', 'nl', 6+12+12, float], # for curve latent, if input is curve, input is 6 + 12 + n_p*3
         flag_diffs: TensorType['b', 'nl', 1+2, int],
         sample_posterior: bool = False,  # True
         return_dict: bool = True,
@@ -548,6 +580,18 @@ class AutoencoderKLWireframe(ModelMixin, ConfigMixin):
         # prepare masks
         flags = flag_diffs[..., 0]
         xs_mask = flags > 0.5
+
+        if not self.input_is_curve_latent:
+            pc = rearrange(xs[..., 6:], 'b nl (np c) -> (b nl) np c', c=3)
+            with torch.no_grad():
+                mu, std = self.curve_vae_encoder(pc, return_std=True)
+            
+            mu = rearrange(mu, 'bs c n -> bs n c')
+            std = rearrange(std, 'bs c n -> bs n c')
+            zs = torch.stack([mu, std], dim=1)
+            zs = rearrange(zs, '(b nl) k n c -> b nl (k n c)', nl=xs.shape[1])
+            
+            xs = torch.cat([xs[..., :6], zs], dim=-1)
 
         # encode and get posterior
         ae_kl_output = self.encode(

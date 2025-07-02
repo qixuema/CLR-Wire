@@ -10,6 +10,7 @@ from src.utils.helpers import (
     get_file_list, get_filename_wo_ext, get_file_list_with_extension, 
     get_or_create_file_list_json,
 )
+from src.utils.geometry import normalize_curves
 from src.dataset.dataset_fn import (
     scale_and_jitter_pc, scale_and_jitter_wireframe_set, curve_yz_scale,
     random_viewpoint, hidden_point_removal,
@@ -165,6 +166,7 @@ class WireframeDataset(Dataset):
         replication: float = 1.,
         sample: bool = False,
         max_num_lines: int = 128,
+        is_curve_latent: bool = True,
     ):
         super().__init__()
         self.transform = transform
@@ -172,6 +174,7 @@ class WireframeDataset(Dataset):
         self.replica = replication
         self.sample = sample
         self.max_num_lines = max_num_lines
+        self.is_curve_latent = is_curve_latent
         
         if self.sample:
             self.transform = None
@@ -199,19 +202,23 @@ class WireframeDataset(Dataset):
         sample = np.load(sample_path)
         adjs = sample['adjs']
         vertices = sample['vertices']
-        curve_latent = sample['zs']
         
         num_lines = adjs.shape[0]
         diffs = compute_diffs(adjs)
         segments = vertices[adjs]
 
-        curve_latent = rearrange(curve_latent, 'n h (block w) -> n (block h w)', block=2, w=3)
+        if self.is_curve_latent:
+            feature = rearrange(sample['zs'], 'n h (block w) -> n (block h w)', block=2, w=3)
+        else:
+            norm_curves = normalize_curves(sample['edge_points'])
+            feature = rearrange(norm_curves, 'b n c -> b (n c)')
+
 
         if self.transform is not None:
             segments = self.transform(segments)        
         
         segments = rearrange(segments, 'n v c -> n (v c)')
-        xs = np.concatenate([segments, curve_latent], axis=1)
+        xs = np.concatenate([segments, feature], axis=1)
 
         padding_cols = self.max_num_lines - num_lines
         xs = np.pad(xs, ((0, padding_cols), (0, 0)), mode='constant', constant_values=0)
