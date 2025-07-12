@@ -196,7 +196,7 @@ class BaseTrainer(Module):
 
     def print_params_num(self):
         total_params = sum(p.numel() for p in self.model.parameters())
-        print(f"autoencoder Total parameters: {total_params / 1e6} M")  
+        print(f"Model Total parameters: {total_params / 1e6} M")  
 
         non_trainable_params = sum(p.numel() for p in self.model.parameters() if not p.requires_grad)        
         print(f"Number of non-trainable parameters: {non_trainable_params/ 1e6}") 
