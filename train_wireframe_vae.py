@@ -2,17 +2,20 @@ import os
 import sys
 from argparse import ArgumentParser
 
+# Import custom modules: model, dataset, trainer, and config utils
 from src.vae.vae_wireframe import AutoencoderKLWireframe as MyModel
 from src.dataset.dataset import WireframeDataset as MyDataset
 from src.trainer.trainer_vae import Trainer as MyTrainer
 from src.utils.config import NestedDictToClass, load_config
 
 # Arguments
+# Parse command-line arguments
 parser = ArgumentParser(description='Train wireframe vae model.')
 parser.add_argument('--config', type=str, default='', help='Path to config file.')
 parser.add_argument('--curve_vae_config', required=False, type=str, default='', help='Path to config file.')
 program_args = parser.parse_args()
 
+# Load and wrap config as attribute-accessible object
 cfg = load_config(program_args.config)
 args = NestedDictToClass(cfg)
 
@@ -92,4 +95,5 @@ trainer = MyTrainer(
     val_every_step=int(args.val_every_epoch * num_step_per_epoch),
 )
 
+# Launch training
 trainer(project=args.wandb_project_name, run=args.wandb_run_name, hps=cfg)
