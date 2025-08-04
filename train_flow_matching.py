@@ -1,18 +1,20 @@
 import sys
 
 from argparse import ArgumentParser
-from src.utils.config import NestedDictToClass, load_config
 
+# Import custom modules: model, dataset, trainer, and config utils
 from src.flow.flow import DiT as MyModel
 from src.dataset.dataset import LatentDataset
 from src.trainer.trainer_flow import Trainer as MyTrainer
+from src.utils.config import NestedDictToClass, load_config
 
 # Arguments
+# Parse command-line arguments
 parser = ArgumentParser(description='Train flow matching model.')
 parser.add_argument('--config', type=str, default='', help='Path to config file.')
-
 program_args = parser.parse_args()
 
+# Load and wrap config as attribute-accessible object
 cfg = load_config(program_args.config)
 args = NestedDictToClass(cfg)
 
@@ -85,4 +87,5 @@ trainer = MyTrainer(
     val_every_step=int(args.val_every_epoch * num_step_per_epoch),
 )
 
+# Launch training
 trainer(project=args.wandb_project_name, run=args.wandb_run_name, hps=cfg)
