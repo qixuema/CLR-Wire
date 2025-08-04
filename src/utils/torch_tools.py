@@ -1,6 +1,8 @@
 import torch
+import torch.nn.functional as F
 from einops import repeat, rearrange
 from torchtyping import TensorType
+from torch.nn import Module
 
 def fmt(v):
     if torch.is_tensor(v) and v.dim() == 0:
@@ -93,3 +95,30 @@ def sample_edge_points(batch_edge_points, num_points=32):
     batch_edge_points = rearrange(batch_edge_points, 'b c n -> b n c')
     
     return batch_edge_points
+
+def point_seq_tangent(
+    point_seq: torch.Tensor, 
+    channel_dim: int = -1,
+    seq_dim: int = -2,
+    eps: float = 1e-12
+) -> torch.Tensor:
+    """
+    compute the tangent vectors of the point sequence
+    """
+    # use the difference of the points to compute the tangent vectors
+    tangent = point_seq.diff(dim=seq_dim)
+
+    # use the last tangent vector to complete the last point
+    last_tangent = tangent.select(seq_dim, -1).unsqueeze(seq_dim)
+    
+    tangent = torch.cat([tangent, last_tangent], dim=seq_dim)
+    tangent = F.normalize(tangent, dim=channel_dim, eps=eps)
+
+    return tangent
+
+def set_module_requires_grad_(
+    module: Module,
+    requires_grad: bool
+):
+    for param in module.parameters():
+        param.requires_grad = requires_grad

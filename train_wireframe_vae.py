@@ -9,8 +9,10 @@ from src.utils.config import NestedDictToClass, load_config
 
 # Arguments
 parser = ArgumentParser(description='Train wireframe vae model.')
-parser.add_argument('--config', type=str, default='', help='Path to config file.')
-parser.add_argument('--curve_vae_config', required=False, type=str, default='', help='Path to config file.')
+parser.add_argument('--config', type=str, 
+                    default='src/configs/train_wireframe_vae.yaml', help='Path to config file.')
+parser.add_argument('--curve_vae_config', required=False, type=str, 
+                    default='src/configs/train_curve_vae.yaml', help='Path to config file.')
 program_args = parser.parse_args()
 
 cfg = load_config(program_args.config)
@@ -23,18 +25,26 @@ if isDebug:
     args.batch_size = 1
     args.num_workers = 1
 
+if args.data.dataset_type == 'curve':
+    curve_vae_cfg = load_config(program_args.curve_vae_config)
+    curve_vae_args = NestedDictToClass(curve_vae_cfg)
+
+is_curve_latent = True if args.data.dataset_type == 'latent' else False
 
 train_dataset = MyDataset(
     dataset_file_path = args.data.train_set_file_path,
     replication=args.data.replication,
     max_num_lines=args.model.max_curves_num,
-    is_train=True)
+    is_train=True,
+    is_curve_latent=is_curve_latent
+)
 
 val_dataset = MyDataset(
     dataset_file_path = args.data.val_set_file_path,
     max_num_lines=args.model.max_curves_num,
     is_train=False,
-)   
+    is_curve_latent=is_curve_latent
+)
 
 model = MyModel(
     latent_channels=args.model.latent_channels,
@@ -48,14 +58,17 @@ model = MyModel(
     max_curves_num=args.model.max_curves_num,
     wireframe_latent_num=args.model.wireframe_latent_num,
     label_smoothing=args.label_smoothing,
-    flag_bce_loss_weight=args.model.flag_bce_loss_weight,
-    segment_ce_loss_weight=args.model.segment_ce_loss_weight,
-    col_diff_ce_loss_weight=args.model.col_diff_ce_loss_weight,
-    row_diff_ce_loss_weight=args.model.row_diff_ce_loss_weight,
+    cls_loss_weight=args.model.cls_loss_weight,
+    segment_loss_weight=args.model.segment_loss_weight,
+    col_diff_loss_weight=args.model.col_diff_loss_weight,
+    row_diff_loss_weight=args.model.row_diff_loss_weight,
     curve_latent_loss_weight=args.model.curve_latent_loss_weight,
     kl_loss_weight=args.model.kl_loss_weight,
     curve_latent_embed_dim=args.model.curve_latent_embed_dim,
     use_mlp_predict=args.model.use_mlp_predict,
+    use_latent_pos_emb=args.model.use_latent_pos_emb,
+    input_is_curve_latent=is_curve_latent,
+    curve_vae_args=curve_vae_args,
 )
 
 

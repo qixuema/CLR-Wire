@@ -7,7 +7,10 @@ from timm.models.vision_transformer import Mlp, Attention
 
 from src.vae.vae_wireframe import AutoencoderKLWireframeFastEncode
 
-from src.pointnet2.pointnet2.models.pointnet2_msg_cls import PointNet2ClassificationMSG_WOPL
+try:
+    from src.pointnet2.pointnet2.models.pointnet2_msg_cls import PointNet2ClassificationMSG_WOPL
+except:
+    print("PointNet2ClassificationMSG_WOPL not found")
 
 
 def set_module_requires_grad_(
@@ -182,11 +185,8 @@ class DiT(nn.Module):
       
         self.pos_embed = nn.Parameter(torch.randn(latent_num, hidden_size))
 
-        attn_drop = 0.3 
-        proj_drop = 0.2
-
         self.blocks = nn.ModuleList([
-            Block(hidden_size, num_heads, mlp_ratio=mlp_ratio, attn_drop=attn_drop, proj_drop=proj_drop) for _ in range(depth)
+            Block(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
 
         self.final_layer = FinalLayer(hidden_size, self.out_channels)
@@ -198,16 +198,13 @@ class DiT(nn.Module):
             self.use_dinov2 = use_dinov2
             if use_dinov2:
                 img_latent_channels = 1024
-                self.process_img_latent = nn.Sequential(
-                    Mlp(
-                        in_features=img_latent_channels, 
-                        hidden_features=1024,
-                        out_features=self.cond_feature_dim,
-                        act_layer=nn.Sigmoid, 
-                        norm_layer=nn.LayerNorm,
-                        drop=0.5
-                    ),
-                    nn.Sigmoid()
+                self.process_img_latent = Mlp(
+                    in_features=img_latent_channels, 
+                    hidden_features=1024,
+                    out_features=self.cond_feature_dim,
+                    act_layer=nn.SiLU, 
+                    norm_layer=nn.LayerNorm,
+                    drop=0.1
                 )
             else:
                 raise ValueError("Invalid condition_on_img mode")

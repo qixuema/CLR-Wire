@@ -2,15 +2,19 @@ import torch
 from torch.utils.data import Dataset
 import numpy as np
 from einops import rearrange
-
+import json
+from pathlib import Path
+import random
 
 from src.utils.helpers import (
     get_file_list, get_filename_wo_ext, get_file_list_with_extension, 
+    get_or_create_file_list_json,
 )
+from src.utils.geometry import normalize_curves
 from src.dataset.dataset_fn import (
     scale_and_jitter_pc, scale_and_jitter_wireframe_set, curve_yz_scale,
     random_viewpoint, hidden_point_removal,
-    aug_pc_by_idx,
+    aug_pc_by_idx, gaussian_smooth_curve, compute_diffs,
 )
 
 class LatentDataset(Dataset):
@@ -47,10 +51,10 @@ class LatentDataset(Dataset):
         self.point_num = point_num
 
         eval_mode = not is_train
-        if sample or eval_mode:
+        if self.sample or eval_mode:
             self.transform = None
 
-        self.data = self._load_data(dataset_file_path)
+        self.data, self.uids = self._load_data(dataset_file_path)
         
         print(f'load {len(self.data)} data')
         
@@ -64,9 +68,10 @@ class LatentDataset(Dataset):
         
 
     def _load_data(self, data_path):
-        file_list = get_file_list(data_path)
-        
-        return file_list
+        dataset = np.load(data_path, allow_pickle=True)
+        data = dataset['data']
+        uids = dataset['uids']
+        return data, uids
 
     def __len__(self):
         if self.is_train != True:
@@ -131,21 +136,26 @@ class LatentDataset(Dataset):
             img_latent = torch.from_numpy(img_latent).to(torch.float32)
             context = img_latent
         else:
-            wireframe_zs_file_path = self.data[idx]
+            wireframe_zs = self.data[idx]
             context = None
 
-        mu_and_std = np.load(wireframe_zs_file_path)['zs']
-        mu = mu_and_std[:,:16]
-        std = mu_and_std[:,16:]
+        mu = wireframe_zs[:,:16]
+        std = wireframe_zs[:,16:]
         zs = mu + std * np.random.randn(*std.shape)
             
         zs = torch.from_numpy(zs).to(torch.float32)
 
+        payload = dict(zs=zs)
+        
+        if context is not None:
+            payload['context'] = context
+    
         if self.sample:
-            uid = get_filename_wo_ext(wireframe_zs_file_path)
-            return dict(zs=zs, context=context, uid=uid)
+            uid = self.uids[idx]
+            payload['uid'] = uid
 
-        return dict(zs=zs, context=context)
+        return payload
+
 
 class WireframeDataset(Dataset):
     def __init__(
@@ -156,6 +166,7 @@ class WireframeDataset(Dataset):
         replication: float = 1.,
         sample: bool = False,
         max_num_lines: int = 128,
+        is_curve_latent: bool = True,
     ):
         super().__init__()
         self.transform = transform
@@ -163,6 +174,7 @@ class WireframeDataset(Dataset):
         self.replica = replication
         self.sample = sample
         self.max_num_lines = max_num_lines
+        self.is_curve_latent = is_curve_latent
         
         if self.sample:
             self.transform = None
@@ -170,10 +182,11 @@ class WireframeDataset(Dataset):
         self.data = self._load_data(dataset_file_path)
         print(f'load {len(self.data)} valid data')
         
-    def _load_data(self, data_path):
-        file_list = get_file_list_with_extension(data_path, '.npz')
-       
-        return file_list
+    def _load_data(self, dataset_path):
+        with open(dataset_path, 'r') as f:
+            file_path_list = json.load(f)
+        
+        return file_path_list
 
     def __len__(self):
         if self.is_train != True:
@@ -186,37 +199,50 @@ class WireframeDataset(Dataset):
         idx = idx % len(self.data)
         sample_path = self.data[idx]
 
-        with np.load(sample_path) as sample:
-            diffs = sample['diffs']
-            segments = sample['segments']
-            curve_latent = sample['curve_latent']
+        sample = np.load(sample_path)
+        adjs = sample['adjs']
+        vertices = sample['vertices']
         
-        num_lines = segments.shape[0]
-        
+        num_lines = adjs.shape[0]
+        diffs = compute_diffs(adjs)
+        segments = vertices[adjs]
+
+        if self.is_curve_latent:
+            feature = rearrange(sample['zs'], 'n h (block w) -> n (block h w)', block=2, w=3)
+        else:
+            norm_curves = normalize_curves(sample['edge_points'])
+            feature = rearrange(norm_curves, 'b n c -> b (n c)')
+
+
         if self.transform is not None:
             segments = self.transform(segments)        
         
         segments = rearrange(segments, 'n v c -> n (v c)')
-        xs = np.concatenate([segments, curve_latent], axis=1)
+        xs = np.concatenate([segments, feature], axis=1)
 
         padding_cols = self.max_num_lines - num_lines
         xs = np.pad(xs, ((0, padding_cols), (0, 0)), mode='constant', constant_values=0)
         diffs = np.pad(diffs, ((0, padding_cols), (0, 0)), mode='constant', constant_values=0)
         
+        valid_flag = np.ones(self.max_num_lines, dtype=np.int8)[:, np.newaxis]
+        valid_flag[num_lines:] = 0  # from nth line to the end, set to 0
+
+        flag_diffs = np.concatenate([valid_flag, diffs], axis=-1)
+        
         xs = torch.from_numpy(xs).to(torch.float32)
-        diffs = torch.from_numpy(diffs).to(torch.long)        
+        flag_diffs = torch.from_numpy(flag_diffs).to(torch.long)        
 
         curveset = {
             'xs': xs,
-            'flag_diffs': diffs, 
+            'flag_diffs': flag_diffs, 
         }
+        
         if self.sample:
-            folder_name = sample_path.split('/')[-2]
-            uid = get_filename_wo_ext(sample_path)
-            curveset['uid'] = f'{folder_name}_{uid}'
+            # folder_name = sample_path.split('/')[-2]
+            uuid = get_filename_wo_ext(sample_path)
+            curveset['uid'] = f'{uuid}'
 
         return curveset
-
 
 
 class CurveDataset(Dataset):
@@ -258,3 +284,53 @@ class CurveDataset(Dataset):
         vertices = torch.from_numpy(vertices).to(torch.float32)
 
         return vertices
+    
+
+class WireframeNormDataset(Dataset):
+    def __init__(
+        self, 
+        dataset_path = '', 
+        correct_norm_curves = False,
+        shuffle_data = False,
+    ):
+        super().__init__()
+        self.correct_norm_curves = correct_norm_curves
+        self.shuffle_data = shuffle_data
+        self.dataset = self._load_data(dataset_path)
+
+    def _load_data(self, dataset_path):
+        src_file_path_list_json = Path(dataset_path).joinpath('src_file_path_list.json')
+        file_path_list = get_or_create_file_list_json(dataset_path, json_path=src_file_path_list_json, extension='.npz')
+        
+        if self.shuffle_data:
+            random.shuffle(file_path_list)
+        return file_path_list
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        sample_path = self.dataset[idx]        
+        sample = np.load(sample_path)
+
+        uuid = get_filename_wo_ext(sample_path)
+        norm_curves = sample['norm_curves']
+        vertices = sample['vertices']
+        adjs = sample['adjs']        
+
+        if self.correct_norm_curves:
+            norm_curves = gaussian_smooth_curve(norm_curves)
+
+        num_curves = norm_curves.shape[0]
+
+        norm_curves = torch.from_numpy(norm_curves).to(torch.float32)
+
+        sample = {
+            'uid': uuid, 
+            'num_curves': num_curves,
+            'vertices': vertices,
+            'adjs': adjs,
+            'norm_curves': norm_curves
+        }        
+
+        return sample

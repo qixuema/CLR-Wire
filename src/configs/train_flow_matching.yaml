@@ -2,7 +2,7 @@ resume_training: false
 from_start: false
 
 epochs: 100
-batch_size: 256
+batch_size: 384
 lr: 0.0001
 
 num_workers: 64
@@ -22,9 +22,10 @@ wandb_run_name: test
 DATA:
     train_set_file_path: /studio/datasets/abc/dataset/wireframe_latent/train
     val_set_file_path: /studio/datasets/abc/dataset/wireframe_latent/val
+    gen_path: /studio/datasets/abc/gen/wireframes
     replication: 1
 
-    use_partial_pc: true
+    use_partial_pc: false
 
 MODEL:
     in_channels: 16
@@ -34,17 +35,17 @@ MODEL:
     mlp_ratio: 4.0
     learn_sigma: True
 
-    path_type: Linear 
-    prediction: velocity
-    loss_weight: None
-    train_eps: 0.0
-    sample_eps: 0.0
-    num-sampling-steps: 250
-
     latent_num: 64
 
-    condition_on_points: true
+    condition_on_points: false
     condition_on_img: false
 
     checkpoint_folder: checkpoints/checkpoints_flow_matching
-    checkpoint_file_name: model-100.pt
+    checkpoint_file_name: model.pt
+
+SAMPLING:
+    mode: SDE
+
+    # num
+    batch_size: 16
+    iter_num: 2

@@ -6,6 +6,7 @@ import enum
 from . import path
 from .utils import mean_flat
 from .integrators import ode, sde
+from scipy.optimize import linear_sum_assignment
 
 class ModelType(enum.Enum):
     """
@@ -97,7 +98,6 @@ class Transport:
             t0, t1 = 1 - t0, 1 - t1
 
         return t0, t1
-
 
     def sample(self, x1):
         """Sampling x0 & t based on shape of x1 (if needed)

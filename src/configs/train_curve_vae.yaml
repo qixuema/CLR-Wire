@@ -2,7 +2,7 @@ resume_training: false
 from_start: true
 
 epochs: 400
-batch_size: 1024
+batch_size: 4096
 lr: 0.0003
 num_workers: 64
 num_gpus: 8
@@ -15,7 +15,7 @@ val_every_epoch: 1
 save_every_epoch: 10
 log_every_step: 10
 
-use_wandb_tracking: false
+use_wandb_tracking: true
 wandb_project_name: curve_vae
 wandb_run_name: test
 
@@ -23,8 +23,9 @@ wandb_run_name: test
 DATA:
     train_set_file_path: /studio/datasets/abc/dataset/curve_dataset/curve_train_dataset.npy
     val_set_file_path: /studio/datasets/abc/dataset/curve_dataset/curve_val_dataset.npy
-    replication: 1
+    replication: 5
     recon_dir_path: /studio/datasets/abc/recon/curves
+    recon_wireframe_norm_file_path: /studio/datasets/abc/dataset/wireframe_dataset/aug48_curve_wireframe_dataset
 
 MODEL:
     in_channels: 3
@@ -32,22 +33,22 @@ MODEL:
     latent_channels: 3
 
     down_block_types: [
-      'DownBlock1D', 'DownBlock1D', 'DownBlock1D', 'DownBlock1D'
+      'DownBlock1D', 'DownBlock1D'
     ]
     up_block_types: [
-      'UpBlock1D', 'UpBlock1D', 'UpBlock1D', 'UpBlock1D'
+      'UpBlock1D', 'UpBlock1D'
     ]
     
     block_out_channels: [
-      64, 128, 256, 512
+      128, 256
     ]
 
     layers_per_block: 2
     act_fn: 'silu'
     norm_num_groups: 32
-    sample_points_num: 64
+    sample_points_num: 16
 
     kl_weight: 0.000005
 
     checkpoint_folder: checkpoints/checkpoints_curve_vae
-    checkpoint_file_name: model-40.pt
+    checkpoint_file_name: model.pt

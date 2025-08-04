@@ -412,6 +412,16 @@ class UNetMidBlock1D(nn.Module):
         return hidden_states
 
 
+
+def ce_loss(pred, target, label_smoothing=0.005, weight=None, reduction='none', num_classes=None):
+    return F.cross_entropy(
+        pred, 
+        target,
+        reduction=reduction, 
+        label_smoothing=label_smoothing, 
+        weight=weight,
+    )
+
 class FocalLoss(nn.Module):
     def __init__(self, gamma=2, alpha=None, task_type='multi-class', num_classes=None):
         """
@@ -436,7 +446,7 @@ class FocalLoss(nn.Module):
             else:
                 self.alpha = alpha
 
-    def forward(self, inputs, targets, num_classes=None, label_smoothing=0.0, class_weights=None, reduction='none'):
+    def forward(self, inputs, targets, num_classes=None, label_smoothing=0.0, weight=None, reduction='none'):
         """
         Forward pass to compute the Focal Loss based on the specified task type.
         :param inputs: Predictions (logits) from the model.
@@ -450,10 +460,10 @@ class FocalLoss(nn.Module):
                          - multi-class: (batch_size,)
         """
         
-        return self.multi_class_focal_loss(inputs, targets, num_classes, label_smoothing, class_weights, reduction)
+        return self.multi_class_focal_loss(inputs, targets, num_classes, label_smoothing, weight, reduction)
 
 
-    def multi_class_focal_loss(self, inputs, targets, num_classes=None, label_smoothing=0.0, class_weights=None, reduction='none'):
+    def multi_class_focal_loss(self, inputs, targets, num_classes=None, label_smoothing=0.0, weight=None, reduction='none'):
         """ Focal loss for multi-class classification. """
         if self.alpha is not None:
             alpha = self.alpha.to(inputs.device)
@@ -479,7 +489,7 @@ class FocalLoss(nn.Module):
             targets,
             reduction='none', 
             label_smoothing=label_smoothing, 
-            weight=class_weights
+            weight=weight
         )
         
         # Compute focal weight

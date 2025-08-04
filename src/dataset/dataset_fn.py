@@ -2,11 +2,15 @@ import numpy as np
 from scipy.spatial import ConvexHull
 from concurrent.futures import ThreadPoolExecutor
 import random
+import torch
+from scipy.ndimage import gaussian_filter1d
+
 
 from src.utils.numpy_tools import (
     rotation_matrix_x, rotation_matrix_y, rotation_matrix_z
 )
 
+from src.utils.helpers import first
 
 def random_viewpoint():
     theta = np.random.uniform(np.radians(20), np.radians(110))
@@ -194,3 +198,41 @@ def aug_pc_by_idx(pc, idx):
     pc = np.concatenate([points, normals], axis=1)
     
     return pc
+
+def curve_to_mean_custom_collate(data, pad_id = -1):
+    is_dict = isinstance(first(data), dict)
+
+    if is_dict:
+        keys = first(data).keys()
+        data = [d.values() for d in data]
+
+    output = []
+
+    for key, datum in zip(keys,  zip(*data)):
+        if key == 'norm_curves':
+            datum = torch.concatenate(datum, dim=0)
+        else:
+            datum = list(datum)
+
+        output.append(datum)
+
+    output = tuple(output)
+
+    if is_dict:
+        output = dict(zip(keys, output))
+
+    return output
+
+def gaussian_smooth_curve(points, sigma=1.0):
+    points = np.array(points)
+    points_smoothed = gaussian_filter1d(points.astype(np.float32), sigma=sigma, axis=-2)
+    
+    # set the first and last points to be the same as the original points
+    points_smoothed[...,0,:] = points[...,0,:]
+    points_smoothed[..., -1,:] = points[..., -1,:]
+    return points_smoothed
+
+def compute_diffs(lines):
+    col_diff = np.diff(lines[:,0], prepend=lines[0,0])
+    row_diff = np.clip(lines[:, 1] - lines[:, 0] - 1, 0, None)
+    return np.stack([col_diff, row_diff], axis=1)

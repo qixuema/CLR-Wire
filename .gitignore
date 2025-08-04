@@ -173,10 +173,6 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 .vscode/
-
-
-# temp directory
 tmp/
 wandb/
 checkpoints/
-sample/

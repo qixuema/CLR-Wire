@@ -49,8 +49,8 @@ model = MyModel(
     num_heads=args.model.num_heads,
     depth=args.model.depth,
     mlp_ratio=args.model.mlp_ratio,
-    condition_on_points=args.model.condition_on_points if hasattr(args.model, 'condition_on_points') else False,
-    condition_on_img=args.model.condition_on_img if hasattr(args.model, 'condition_on_img') else False,
+    condition_on_points=args.model.condition_on_points,
+    condition_on_img=args.model.condition_on_img,
 )
 
 epochs = args.epochs

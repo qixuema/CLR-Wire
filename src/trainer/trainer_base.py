@@ -145,7 +145,7 @@ class BaseTrainer(Module):
             self.val_dl_iter = cycle(self.val_dl)
 
 
-        self.num_step_per_epoch = num_step_per_epoch // dataset.replica
+        self.num_step_per_epoch = max(num_step_per_epoch // dataset.replica, 1)
 
         # optimizer
 
@@ -196,7 +196,7 @@ class BaseTrainer(Module):
 
     def print_params_num(self):
         total_params = sum(p.numel() for p in self.model.parameters())
-        print(f"autoencoder Total parameters: {total_params / 1e6} M")  
+        print(f"Model Total parameters: {total_params / 1e6} M")  
 
         non_trainable_params = sum(p.numel() for p in self.model.parameters() if not p.requires_grad)        
         print(f"Number of non-trainable parameters: {non_trainable_params/ 1e6}") 
@@ -378,7 +378,7 @@ class BaseTrainer(Module):
 
                         total_val_loss += (loss / num_val_batches)
 
-                self.print(get_current_time() + f' valid loss: {total_val_loss:.3f}')    
+                self.print(get_current_time() + f' valid loss: {total_val_loss:.3e}')    
 
                 self.log(val_loss = total_val_loss)
 
@@ -391,9 +391,8 @@ class BaseTrainer(Module):
 
                 self.print(get_current_time() + f' checkpoint saved at {self.checkpoint_folder / f"model-{milestone}.pt"}')
 
-            if divisible_by(step, self.num_step_per_epoch):
-                if self.is_main:
-                    print(get_current_time() + f' {step // self.num_step_per_epoch} epoch at ', step)                    
+            if self.is_main and divisible_by(step, self.num_step_per_epoch * 10):
+                print(get_current_time() + f' {step // self.num_step_per_epoch} epoch at ', step)                    
 
             self.wait()
 
